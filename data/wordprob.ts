@@ -1,0 +1,845 @@
+/**
+ * Keyword → Algebra Mapping — GMAT drill bank.
+ *
+ * Quick drills that train vocabulary-to-algebra translation.
+ * Each problem is a short English phrase → algebraic expression.
+ *
+ * Categories:
+ *  1. Vocabulary → Algebra  (core keyword mappings)
+ *  2. Percent Keywords      (% phrase → multiplier / setup)
+ *  3. Inequality Keywords   (qualifier → inequality symbol)
+ */
+
+export interface WordProblem {
+  /** Unique id */
+  id: string;
+  /** Category label */
+  category: string;
+  /** The English phrase/scenario */
+  display: string;
+  /** Question prompt */
+  question: string;
+  /** Correct answer */
+  answer: string;
+  /** Four MC options */
+  options: string[];
+  /** Hint shown after wrong answer */
+  hint: string;
+  /** History key for spaced repetition */
+  historyKey: string;
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** Pick 3 random wrong options + the correct answer, then shuffle.
+ *  Pass `avoidIdx` (previous answer index) on repeat to bias away from that slot.
+ */
+export function shuffleWordOptions(p: WordProblem, avoidIdx?: number): WordProblem {
+  const wrong = shuffle(p.options.filter((o) => o !== p.answer)).slice(0, 3);
+  const all = [p.answer, ...wrong];
+  if (avoidIdx !== undefined && avoidIdx >= 0) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const s = shuffle(all);
+      if (s.indexOf(p.answer) !== avoidIdx) return { ...p, options: s };
+    }
+  }
+  return { ...p, options: shuffle(all) };
+}
+
+// ── 1. Vocabulary → Algebra ────────────────────────────────
+
+const vocabulary: WordProblem[] = [
+  {
+    id: 'v01', category: 'Vocabulary → Algebra',
+    display: '"x is 5 more than y"',
+    question: 'Translate:',
+    answer: 'x = y + 5',
+    options: ['x = y + 5', 'x = 5y', 'x + 5 = y', 'x = y − 5', 'y = x + 5', 'x = y / 5'],
+    hint: '"more than" → add: x = y + 5',
+    historyKey: 'wp:v:more-than',
+  },
+  {
+    id: 'v02', category: 'Vocabulary → Algebra',
+    display: '"x is 3 less than y"',
+    question: 'Translate:',
+    answer: 'x = y − 3',
+    options: ['x = y − 3', 'x = 3 − y', 'x − 3 = y', 'y = x − 3', 'x + 3 = y', 'x = y + 3'],
+    hint: '"x is 3 less than y" → x = y − 3 (NOT 3 − y)',
+    historyKey: 'wp:v:less-than',
+  },
+  {
+    id: 'v03', category: 'Vocabulary → Algebra',
+    display: '"x is twice y"',
+    question: 'Translate:',
+    answer: 'x = 2y',
+    options: ['x = 2y', 'x = y/2', '2x = y', 'x = y + 2', 'y = 2x', 'x = y²'],
+    hint: '"twice" → ×2: x = 2y',
+    historyKey: 'wp:v:twice',
+  },
+  {
+    id: 'v04', category: 'Vocabulary → Algebra',
+    display: '"the product of x and y"',
+    question: 'Translate:',
+    answer: 'xy',
+    options: ['xy', 'x + y', 'x − y', 'x/y', 'x²y', '(x + y)²'],
+    hint: '"product" = multiplication: xy',
+    historyKey: 'wp:v:product',
+  },
+  {
+    id: 'v05', category: 'Vocabulary → Algebra',
+    display: '"the quotient of x and y"',
+    question: 'Translate:',
+    answer: 'x/y',
+    options: ['x/y', 'xy', 'x − y', 'y/x', '(x − y)/2', 'x mod y'],
+    hint: '"quotient" = division. First named is numerator: x/y',
+    historyKey: 'wp:v:quotient',
+  },
+  {
+    id: 'v06', category: 'Vocabulary → Algebra',
+    display: '"20% of x"',
+    question: 'Translate:',
+    answer: '0.2x',
+    options: ['0.2x', '20x', 'x/20', 'x + 0.2', 'x − 0.2', '2x'],
+    hint: '"of" → multiply: 20% of x = 0.2x',
+    historyKey: 'wp:v:percent-of',
+  },
+  {
+    id: 'v07', category: 'Vocabulary → Algebra',
+    display: '"x is what percent of y?"',
+    question: 'Set up:',
+    answer: 'p = (x/y) × 100',
+    options: ['p = (x/y) × 100', 'p = (y/x) × 100', 'p = xy/100', 'p = x − y', 'p = x/(x + y) × 100', 'p = (x − y)/y × 100'],
+    hint: '"what percent" → p/100 = x/y → p = (x/y) × 100',
+    historyKey: 'wp:v:what-pct',
+  },
+  {
+    id: 'v08', category: 'Vocabulary → Algebra',
+    display: '"the sum of three consecutive integers"',
+    question: 'If the smallest is n:',
+    answer: '3n + 3',
+    options: ['3n + 3', '3n', 'n + 3', '3n + 6', 'n³ + 3', '3(n + 3)'],
+    hint: 'n + (n+1) + (n+2) = 3n + 3',
+    historyKey: 'wp:v:consecutive',
+  },
+  {
+    id: 'v09', category: 'Vocabulary → Algebra',
+    display: '"a number decreased by 7"',
+    question: 'Translate:',
+    answer: 'x − 7',
+    options: ['x − 7', '7 − x', '7x', 'x/7', 'x + 7', '−7x'],
+    hint: '"decreased by" = subtraction: x − 7',
+    historyKey: 'wp:v:decreased',
+  },
+  {
+    id: 'v10', category: 'Vocabulary → Algebra',
+    display: '"the ratio of a to b is 3 to 5"',
+    question: 'Translate:',
+    answer: 'a/b = 3/5',
+    options: ['a/b = 3/5', 'a/b = 5/3', 'a − b = 3 − 5', '3a = 5b', 'a + b = 8', 'b/a = 3/5'],
+    hint: '"ratio of a to b is 3 to 5" → a/b = 3/5',
+    historyKey: 'wp:v:ratio',
+  },
+  {
+    id: 'v11', category: 'Vocabulary → Algebra',
+    display: '"three-fourths of x"',
+    question: 'Translate:',
+    answer: '(3/4)x',
+    options: ['(3/4)x', '3x + 4', 'x − 3/4', '4x/3', '3/(4x)', 'x/3 + 4'],
+    hint: '"three-fourths of" = (3/4) × x',
+    historyKey: 'wp:v:three-fourths',
+  },
+  {
+    id: 'v12', category: 'Vocabulary → Algebra',
+    display: '"x exceeds y by 10"',
+    question: 'Translate:',
+    answer: 'x = y + 10',
+    options: ['x = y + 10', 'y = x + 10', 'x − y = −10', 'x = 10y', 'x + y = 10', 'x = y − 10'],
+    hint: '"exceeds by" → difference: x − y = 10 → x = y + 10',
+    historyKey: 'wp:v:exceeds',
+  },
+  {
+    id: 'v13', category: 'Vocabulary → Algebra',
+    display: '"the reciprocal of x"',
+    question: 'Translate:',
+    answer: '1/x',
+    options: ['1/x', '−x', 'x²', 'x − 1', 'x/2', '√x'],
+    hint: '"reciprocal" = flip: 1/x',
+    historyKey: 'wp:v:reciprocal',
+  },
+  {
+    id: 'v14', category: 'Vocabulary → Algebra',
+    display: '"the square of x"',
+    question: 'Translate:',
+    answer: 'x²',
+    options: ['x²', '2x', '√x', 'x/2', 'x + 2', 'x³'],
+    hint: '"square of" = raise to the 2nd power: x²',
+    historyKey: 'wp:v:square-of',
+  },
+  {
+    id: 'v15', category: 'Vocabulary → Algebra',
+    display: '"the cube of x"',
+    question: 'Translate:',
+    answer: 'x³',
+    options: ['x³', '3x', '∘x', 'x/3', 'x + 3', 'x²'],
+    hint: '"cube of" = raise to the 3rd power: x³',
+    historyKey: 'wp:v:cube-of',
+  },
+  {
+    id: 'v16', category: 'Vocabulary → Algebra',
+    display: '"x increased by 40%"',
+    question: 'Translate:',
+    answer: '1.4x',
+    options: ['1.4x', 'x + 40', '0.4x', '40x', '1.04x', 'x/1.4'],
+    hint: '"increased by 40%" → x + 0.4x = 1.4x',
+    historyKey: 'wp:v:increased-by',
+  },
+  {
+    id: 'v17', category: 'Vocabulary → Algebra',
+    display: '"x diminished by y"',
+    question: 'Translate:',
+    answer: 'x − y',
+    options: ['x − y', 'y − x', 'xy', 'x/y', 'x + y', '|x − y|'],
+    hint: '"diminished by" = subtraction: x − y',
+    historyKey: 'wp:v:diminished',
+  },
+  {
+    id: 'v18', category: 'Vocabulary → Algebra',
+    display: '"the remainder when x is divided by 5"',
+    question: 'Express with mod:',
+    answer: 'x mod 5',
+    options: ['x mod 5', 'x/5', 'x − 5', '5/x', '⌊x/5⌋', 'x − 5⌊x/5⌋'],
+    hint: '"remainder when divided by" → modulo: x mod 5',
+    historyKey: 'wp:v:remainder',
+  },
+  {
+    id: 'v19', category: 'Vocabulary → Algebra',
+    display: '"x is a divisor of 24"',
+    question: 'Translate:',
+    answer: '24/x is an integer',
+    options: ['24/x is an integer', 'x/24 is an integer', 'x = 24', 'x > 24', 'x + 24 = 0', '24 mod x = x'],
+    hint: '"x is a divisor of 24" means 24 ÷ x has no remainder',
+    historyKey: 'wp:v:divisor',
+  },
+  {
+    id: 'v20', category: 'Vocabulary → Algebra',
+    display: '"half of x, increased by 3"',
+    question: 'Translate:',
+    answer: 'x/2 + 3',
+    options: ['x/2 + 3', '(x + 3)/2', '3x/2', 'x/(2 + 3)', '(x − 3)/2', '2x + 3'],
+    hint: '"half of x" = x/2, then "increased by 3" = + 3',
+    historyKey: 'wp:v:half-plus',
+  },
+  {
+    id: 'v21', category: 'Vocabulary → Algebra',
+    display: '"y years from now"',
+    question: 'If current age is a, future age is:',
+    answer: 'a + y',
+    options: ['a + y', 'a − y', 'ay', 'a/y', 'y − a', 'a + y²'],
+    hint: '"y years from now" → add y to current: a + y',
+    historyKey: 'wp:v:years-from-now',
+  },
+  {
+    id: 'v22', category: 'Vocabulary → Algebra',
+    display: '"y years ago"',
+    question: 'If current age is a, past age is:',
+    answer: 'a − y',
+    options: ['a − y', 'a + y', 'y − a', 'a/y', 'ay', '|a − y|'],
+    hint: '"y years ago" → subtract y from current: a − y',
+    historyKey: 'wp:v:years-ago',
+  },
+  {
+    id: 'v23', category: 'Vocabulary → Algebra',
+    display: '"x is a multiple of 7"',
+    question: 'Translate:',
+    answer: 'x = 7k for some integer k',
+    options: ['x = 7k for some integer k', 'x/7 has a remainder', 'x + 7 = k', '7 = xk', 'x mod 7 ≠ 0', 'k/x = 7'],
+    hint: '"multiple of 7" → x is divisible by 7 → x = 7k',
+    historyKey: 'wp:v:multiple-of',
+  },
+  {
+    id: 'v24', category: 'Vocabulary → Algebra',
+    display: '"the square root of x"',
+    question: 'Translate:',
+    answer: '√x',
+    options: ['√x', 'x²', 'x/2', '2x', 'x^(1/3)', '|x|'],
+    hint: '"square root" = √x = x^(1/2)',
+    historyKey: 'wp:v:sqrt',
+  },
+  {
+    id: 'v25', category: 'Vocabulary → Algebra',
+    display: '"x is inversely proportional to y"',
+    question: 'Translate:',
+    answer: 'xy = k (constant)',
+    options: ['xy = k (constant)', 'x/y = k', 'x + y = k', 'x − y = k', 'x²y = k', 'x = ky²'],
+    hint: '"inversely proportional" → xy = k. As one goes up, the other goes down.',
+    historyKey: 'wp:v:inverse-prop',
+  },
+  {
+    id: 'v26', category: 'Vocabulary → Algebra',
+    display: '"x is directly proportional to y"',
+    question: 'Translate:',
+    answer: 'x/y = k (constant)',
+    options: ['x/y = k (constant)', 'xy = k', 'x + y = k', 'x = y + k', 'x² = ky', 'x − y = k'],
+    hint: '"directly proportional" → x/y = k → x = ky',
+    historyKey: 'wp:v:direct-prop',
+  },
+  {
+    id: 'v27', category: 'Vocabulary → Algebra',
+    display: '"the absolute value of (x − 3)"',
+    question: 'Translate:',
+    answer: '|x − 3|',
+    options: ['|x − 3|', 'x − 3', '−(x − 3)', '(x − 3)²', '3 − x', '√(x − 3)'],
+    hint: '"absolute value" → |x − 3| (always non-negative)',
+    historyKey: 'wp:v:abs-value',
+  },
+  {
+    id: 'v28', category: 'Vocabulary → Algebra',
+    display: '"the sum of x and y, divided by their difference"',
+    question: 'Translate:',
+    answer: '(x + y) / (x − y)',
+    options: ['(x + y) / (x − y)', 'x/y + y/x', '(x − y) / (x + y)', 'xy / (x − y)', '(x + y)² / (x − y)', '2xy / (x + y)'],
+    hint: 'Sum = x + y, difference = x − y. Divide: (x + y)/(x − y)',
+    historyKey: 'wp:v:sum-over-diff',
+  },
+  {
+    id: 'v29', category: 'Vocabulary → Algebra',
+    display: '"the ratio of x to y"',
+    question: 'Translate:',
+    answer: 'x / y',
+    options: ['x / y', 'x − y', 'x × y', 'y / x', 'x + y', 'x : y + 1'],
+    hint: '"ratio of x to y" = x/y. Ratio is division.',
+    historyKey: 'wp:v:ratio',
+  },
+  {
+    id: 'v30', category: 'Vocabulary → Algebra',
+    display: '"the product of x and the quantity (y + 2)"',
+    question: 'Translate:',
+    answer: 'x(y + 2)',
+    options: ['x(y + 2)', 'xy + 2', 'x + y + 2', '(x + y) × 2', 'x × y × 2', 'x + 2y'],
+    hint: '"product" = multiply. "the quantity" groups terms: x(y + 2).',
+    historyKey: 'wp:v:product-quantity',
+  },
+  {
+    id: 'v31', category: 'Vocabulary → Algebra',
+    display: '"x exceeds y by 10"',
+    question: 'Translate:',
+    answer: 'x = y + 10',
+    options: ['x = y + 10', 'x = y − 10', 'y = x + 10', 'x + y = 10', 'x − y = −10', 'x = 10y'],
+    hint: '"exceeds by" = is more than by that amount. x − y = 10 → x = y + 10.',
+    historyKey: 'wp:v:exceeds',
+  },
+  {
+    id: 'v32', category: 'Vocabulary → Algebra',
+    display: '"the average of three consecutive integers starting at n"',
+    question: 'Translate:',
+    answer: 'n + 1',
+    options: ['n + 1', '3n + 3', 'n + 2', '(3n + 3) / 3', 'n + 3', '3n / 3'],
+    hint: 'Consecutive: n, n+1, n+2. Average = (3n + 3)/3 = n + 1 (always the middle term).',
+    historyKey: 'wp:v:avg-consec',
+  },
+];
+
+// ── 2. Percent Keywords ────────────────────────────────────
+
+const percentKeywords: WordProblem[] = [
+  {
+    id: 'pk01', category: 'Percent Keywords',
+    display: '"increased by 20%"',
+    question: 'Multiplier?',
+    answer: '×1.20',
+    options: ['×1.20', '×0.20', '×1.02', '×0.80', '×1.22', '×0.12'],
+    hint: '"increased by 20%" → multiply by (1 + 0.20) = 1.20',
+    historyKey: 'wp:pk:inc-20',
+  },
+  {
+    id: 'pk02', category: 'Percent Keywords',
+    display: '"decreased by 15%"',
+    question: 'Multiplier?',
+    answer: '×0.85',
+    options: ['×0.85', '×0.15', '×1.15', '×1.85', '×0.815', '×0.185'],
+    hint: '"decreased by 15%" → multiply by (1 − 0.15) = 0.85',
+    historyKey: 'wp:pk:dec-15',
+  },
+  {
+    id: 'pk03', category: 'Percent Keywords',
+    display: '"25% discount"',
+    question: 'Multiplier on original price?',
+    answer: '×0.75',
+    options: ['×0.75', '×0.25', '×1.25', '×1.75', '×0.70', '×0.80'],
+    hint: '"25% discount" → you pay 75% → ×0.75',
+    historyKey: 'wp:pk:discount-25',
+  },
+  {
+    id: 'pk04', category: 'Percent Keywords',
+    display: '"tripled"',
+    question: 'Percent increase?',
+    answer: '200% increase',
+    options: ['200% increase', '300% increase', '100% increase', '33% increase', '150% increase', '66% increase'],
+    hint: 'Tripled → ×3. Increase = 3 − 1 = 2 = 200%',
+    historyKey: 'wp:pk:tripled',
+  },
+  {
+    id: 'pk05', category: 'Percent Keywords',
+    display: '"x is what percent greater than y?"',
+    question: 'Set up:',
+    answer: '(x − y) / y × 100',
+    options: ['(x − y) / y × 100', '(x − y) / x × 100', 'x / y × 100', '(y − x) / y × 100', '(x + y) / y × 100', 'x / (x − y) × 100'],
+    hint: '"What percent greater" → difference over the BASE. Base is y (what you compare TO).',
+    historyKey: 'wp:pk:pct-greater',
+  },
+  {
+    id: 'pk06', category: 'Percent Keywords',
+    display: '"A is 50% of B"',
+    question: 'B is what percent of A?',
+    answer: '200%',
+    options: ['200%', '50%', '150%', '100%', '250%', '75%'],
+    hint: 'A = 0.5B → B = 2A → B is 200% of A',
+    historyKey: 'wp:pk:reverse-50',
+  },
+  {
+    id: 'pk07', category: 'Percent Keywords',
+    display: '"increased by p%, then increased by p% again"',
+    question: 'Net multiplier:',
+    answer: '(1 + p/100)², not 1 + 2p/100',
+    options: ['(1 + p/100)², not 1 + 2p/100', '1 + 2p/100', '(2p/100)²', '2(1 + p/100)', '1 + p²/100', '1 + p/50'],
+    hint: 'Compound, not simple! Multiply the multipliers: (1 + p/100) × (1 + p/100). TRAP: adding percents gives the wrong answer.',
+    historyKey: 'wp:pk:compound',
+  },
+  {
+    id: 'pk08', category: 'Percent Keywords',
+    display: '"price goes up p%, then down p%"',
+    question: 'Net multiplier:',
+    answer: '1 − (p/100)² — always a net decrease',
+    options: ['1 − (p/100)² — always a net decrease', '1 (no change)', '1 + (p/100)²', '1 − p/100', '1 − 2p/100', '(p/100)²'],
+    hint: '(1 + p/100)(1 − p/100) = 1 − (p/100)². Up then down same % never cancels — always a net loss!',
+    historyKey: 'wp:pk:up-down-trap',
+  },
+  {
+    id: 'pk09', category: 'Percent Keywords',
+    display: '"profit margin of 30%"',
+    question: 'If cost is C, selling price is:',
+    answer: '1.3C',
+    options: ['1.3C', '0.3C', 'C + 30', 'C/0.3', 'C/1.3', '1.03C'],
+    hint: '"30% profit" → sell at cost + 30% of cost = 1.3C',
+    historyKey: 'wp:pk:profit-30',
+  },
+  {
+    id: 'pk10', category: 'Percent Keywords',
+    display: '"after a discount of p%, the price is P"',
+    question: 'Original price equation:',
+    answer: 'Original × (1 − p/100) = P',
+    options: ['Original × (1 − p/100) = P', 'Original − p = P', 'Original × p/100 = P', 'Original + P = p', 'P × (1 + p/100) = Original', 'P − p/100 = Original'],
+    hint: 'A p% discount means you pay (100−p)%. So Original × (1 − p/100) = P.',
+    historyKey: 'wp:pk:find-original',
+  },
+  {
+    id: 'pk11', category: 'Percent Keywords',
+    display: '"first changes by a%, then changes by b%"',
+    question: 'Net multiplier:',
+    answer: '(1 + a/100)(1 + b/100)',
+    options: ['(1 + a/100)(1 + b/100)', '1 + (a + b)/100', '(a + b)/100', '1 + ab/100', '(1 + a/100) + (1 + b/100)', '1 + a/100 + b/100'],
+    hint: 'Successive changes → MULTIPLY multipliers. A decrease uses a negative value for a or b.',
+    historyKey: 'wp:pk:successive',
+  },
+  {
+    id: 'pk12', category: 'Percent Keywords',
+    display: '"cost is C, selling price is S, profit is S − C"',
+    question: 'Percent profit (markup):',
+    answer: '(S − C) / C × 100',
+    options: ['(S − C) / C × 100', '(S − C) / S × 100', 'S / C × 100', 'C / S × 100', '(S + C) / C × 100', '(C − S) / S × 100'],
+    hint: 'Percent profit uses COST as the base: (profit/cost) × 100. TRAP: don\'t use selling price.',
+    historyKey: 'wp:pk:markup',
+  },
+  {
+    id: 'pk13', category: 'Percent Keywords',
+    display: '"x% of y is 30"',
+    question: 'Equation:',
+    answer: '(x/100) × y = 30',
+    options: ['(x/100) × y = 30', 'xy = 30', 'x × y = 3000', '30/x = y', 'x = 30y', '(y/100) × x = 30'],
+    hint: '"x% of y" → (x/100) × y. "of" = multiply, "%" = divide by 100.',
+    historyKey: 'wp:pk:x-pct-of-y',
+  },
+  {
+    id: 'pk14', category: 'Percent Keywords',
+    display: '"what percent of 80 is 20?"',
+    question: 'Setup:',
+    answer: '(20/80) × 100 = 25%',
+    options: ['(20/80) × 100 = 25%', '(80/20) × 100 = 400%', '80 − 20 = 60%', '20 × 80 / 100 = 16%', '(20/100) × 80 = 16%', '80/20 = 4%'],
+    hint: '"what percent of A is B" → (B/A) × 100. The "of" number is the BASE (denominator).',
+    historyKey: 'wp:pk:what-pct',
+  },
+  {
+    id: 'pk15', category: 'Percent Keywords',
+    display: '"increased by 20%, then decreased by 20%"',
+    question: 'Net multiplier:',
+    answer: '×0.96 (net 4% decrease)',
+    options: ['×0.96 (net 4% decrease)', '×1.00 (no change)', '×0.80', '×1.04', '×0.60', '×1.20'],
+    hint: '1.20 × 0.80 = 0.96. Back-to-back % changes don\'t cancel! Common GMAT trap.',
+    historyKey: 'wp:pk:up-then-down',
+  },
+  {
+    id: 'pk16', category: 'Percent Keywords',
+    display: '"A is 150% of B"',
+    question: 'Translate:',
+    answer: 'A = 1.5B',
+    options: ['A = 1.5B', 'A = B + 150', 'B = 1.5A', 'A = 0.15B', 'A/B = 15', 'A − B = 1.5'],
+    hint: '"A is 150% of B" → A = (150/100) × B = 1.5B.',
+    historyKey: 'wp:pk:150-pct-of',
+  },
+];
+
+// ── 3. Inequality Keywords ─────────────────────────────────
+
+const inequalities: WordProblem[] = [
+  {
+    id: 'i01', category: 'Inequality Keywords',
+    display: '"x is at least 5"',
+    question: 'Translate:',
+    answer: 'x ≥ 5',
+    options: ['x ≥ 5', 'x > 5', 'x ≤ 5', 'x = 5', 'x < 5', 'x ≠ 5'],
+    hint: '"at least" = ≥',
+    historyKey: 'wp:i:at-least',
+  },
+  {
+    id: 'i02', category: 'Inequality Keywords',
+    display: '"x is at most 10"',
+    question: 'Translate:',
+    answer: 'x ≤ 10',
+    options: ['x ≤ 10', 'x < 10', 'x ≥ 10', 'x = 10', 'x > 10', 'x ≠ 10'],
+    hint: '"at most" = ≤',
+    historyKey: 'wp:i:at-most',
+  },
+  {
+    id: 'i03', category: 'Inequality Keywords',
+    display: '"x is no more than 7"',
+    question: 'Translate:',
+    answer: 'x ≤ 7',
+    options: ['x ≤ 7', 'x < 7', 'x ≥ 7', 'x > 7', 'x = 7', 'x ≠ 7'],
+    hint: '"no more than" = at most = ≤',
+    historyKey: 'wp:i:no-more',
+  },
+  {
+    id: 'i04', category: 'Inequality Keywords',
+    display: '"x is no less than 3"',
+    question: 'Translate:',
+    answer: 'x ≥ 3',
+    options: ['x ≥ 3', 'x > 3', 'x ≤ 3', 'x < 3', 'x = 3', 'x ≠ 3'],
+    hint: '"no less than" = at least = ≥',
+    historyKey: 'wp:i:no-less',
+  },
+  {
+    id: 'i05', category: 'Inequality Keywords',
+    display: '"multiply x > 3 by −2"',
+    question: 'Result:',
+    answer: '−2x < −6',
+    options: ['−2x < −6', '−2x > −6', '−2x > 6', '−2x < 6', '2x < −6', '−2x = −6'],
+    hint: 'Multiplying by a negative FLIPS the inequality sign!',
+    historyKey: 'wp:i:flip-sign',
+  },
+  {
+    id: 'i06', category: 'Inequality Keywords',
+    display: '"x is between 2 and 8 inclusive"',
+    question: 'Translate:',
+    answer: '2 ≤ x ≤ 8',
+    options: ['2 ≤ x ≤ 8', '2 < x < 8', 'x ≥ 2 or x ≤ 8', 'x > 2 and x < 8', '2 ≤ x < 8', '2 < x ≤ 8'],
+    hint: '"inclusive" → endpoints included: 2 ≤ x ≤ 8',
+    historyKey: 'wp:i:between-incl',
+  },
+  {
+    id: 'i07', category: 'Inequality Keywords',
+    display: '"x exceeds 12"',
+    question: 'Translate:',
+    answer: 'x > 12',
+    options: ['x > 12', 'x ≥ 12', 'x < 12', 'x = 12', 'x ≤ 12', 'x ≠ 12'],
+    hint: '"exceeds" = strictly greater than: x > 12',
+    historyKey: 'wp:i:exceeds',
+  },
+  {
+    id: 'i08', category: 'Inequality Keywords',
+    display: '"x is positive"',
+    question: 'Translate:',
+    answer: 'x > 0',
+    options: ['x > 0', 'x ≥ 0', 'x ≥ 1', 'x ≠ 0', 'x < 0', 'x = 0'],
+    hint: '"positive" = strictly greater than zero: x > 0',
+    historyKey: 'wp:i:positive',
+  },
+  {
+    id: 'i09', category: 'Inequality Keywords',
+    display: '"x is non-negative"',
+    question: 'Translate:',
+    answer: 'x ≥ 0',
+    options: ['x ≥ 0', 'x > 0', 'x ≠ 0', 'x ≤ 0', 'x = 0', 'x ≥ 1'],
+    hint: '"non-negative" = zero or positive: x ≥ 0',
+    historyKey: 'wp:i:non-negative',
+  },
+  {
+    id: 'i10', category: 'Inequality Keywords',
+    display: '"x is at most twice y"',
+    question: 'Translate:',
+    answer: 'x ≤ 2y',
+    options: ['x ≤ 2y', 'x ≥ 2y', 'x < 2y', '2x ≤ y', 'x = 2y', 'x ≤ y/2'],
+    hint: '"at most twice y" → x ≤ 2y',
+    historyKey: 'wp:i:at-most-twice',
+  },
+  {
+    id: 'i11', category: 'Inequality Keywords',
+    display: '"x is between 3 and 7, exclusive"',
+    question: 'Translate:',
+    answer: '3 < x < 7',
+    options: ['3 < x < 7', '3 ≤ x ≤ 7', 'x < 3 or x > 7', '3 ≤ x < 7', 'x > 3 and x > 7', '7 < x < 3'],
+    hint: '"between ... exclusive" → strict inequalities: 3 < x < 7 (endpoints not included).',
+    historyKey: 'wp:i:between-exclusive',
+  },
+  {
+    id: 'i12', category: 'Inequality Keywords',
+    display: '"x is no less than 5"',
+    question: 'Translate:',
+    answer: 'x ≥ 5',
+    options: ['x ≥ 5', 'x > 5', 'x ≤ 5', 'x < 5', 'x = 5', 'x ≠ 5'],
+    hint: '"no less than" = at least = ≥. x is 5 or more.',
+    historyKey: 'wp:i:no-less-than',
+  },
+];
+
+// ── 4. Rate & Work Setups ──────────────────────────────────
+
+const rateWorkFormulas: WordProblem[] = [
+  {
+    id: 'rw01', category: 'Rate & Work Setups',
+    display: '"Machine A finishes a job in a hours. Machine B finishes it in b hours. Both work together."',
+    question: 'Set up combined time:',
+    answer: '1/a + 1/b = 1/t',
+    options: ['1/a + 1/b = 1/t', 'a + b = t', 't = ab', '1/(a + b) = t', 't = (a − b)/2', 'a/b = t'],
+    hint: 'Add RATES, not times! Rate_A = 1/a, Rate_B = 1/b. Combined rate: 1/a + 1/b = 1/t.',
+    historyKey: 'wp:rw:combined-work',
+  },
+  {
+    id: 'rw02', category: 'Rate & Work Setups',
+    display: '"Same distance traveled at speed s₁ one way and s₂ returning"',
+    question: 'Average speed for the round trip:',
+    answer: '2s₁s₂ / (s₁ + s₂)',
+    options: ['2s₁s₂ / (s₁ + s₂)', '(s₁ + s₂) / 2', '√(s₁ × s₂)', 's₁s₂ / (s₁ + s₂)', '(s₁² + s₂²) / (s₁ + s₂)', 's₁ + s₂'],
+    hint: 'Same distance each way → harmonic mean. TRAP: (s₁+s₂)/2 is always wrong here.',
+    historyKey: 'wp:rw:harmonic-mean',
+  },
+  {
+    id: 'rw03', category: 'Rate & Work Setups',
+    display: '"Car goes d₁ miles at r₁ mph, then d₂ miles at r₂ mph"',
+    question: 'Average speed for the whole trip:',
+    answer: '(d₁ + d₂) / (d₁/r₁ + d₂/r₂)',
+    options: ['(d₁ + d₂) / (d₁/r₁ + d₂/r₂)', '(r₁ + r₂) / 2', '(d₁r₁ + d₂r₂) / (d₁ + d₂)', '(d₁ + d₂) / (r₁ + r₂)', 'r₁r₂ / (r₁ + r₂)', '(d₁r₂ + d₂r₁) / (d₁ + d₂)'],
+    hint: 'Avg speed = total distance / total time. Total time = d₁/r₁ + d₂/r₂. NEVER average the speeds.',
+    historyKey: 'wp:rw:avg-speed-trap',
+  },
+  {
+    id: 'rw04', category: 'Rate & Work Setups',
+    display: '"Train A leaves at speed r₁. T hours later, faster Train B (speed r₂) chases same direction."',
+    question: 'Catch-up equation (t = A\'s total time):',
+    answer: 'r₁t = r₂(t − T)',
+    options: ['r₁t = r₂(t − T)', 'r₁ + r₂ = t/T', 'r₁T = r₂t', 'r₁r₂ = Tt', '(r₂ − r₁)t = T', 'r₁(t + T) = r₂t'],
+    hint: 'Same distance when B catches A. A travels r₁t, B travels r₂(t − T). Set equal.',
+    historyKey: 'wp:rw:catch-up',
+  },
+  {
+    id: 'rw05', category: 'Rate & Work Setups',
+    display: '"Two cars leave the same point simultaneously, going opposite directions at r₁ and r₂"',
+    question: 'Distance apart after t hours:',
+    answer: '(r₁ + r₂)t',
+    options: ['(r₁ + r₂)t', '|r₁ − r₂|t', 'r₁r₂t', '(r₁ + r₂)/t', 'r₁t − r₂t', 'r₁t × r₂t'],
+    hint: 'Opposite directions → speeds ADD. Gap = (r₁ + r₂) × t.',
+    historyKey: 'wp:rw:opposite-dir',
+  },
+  {
+    id: 'rw06', category: 'Rate & Work Setups',
+    display: '"n identical machines, each completes a job alone in t hours"',
+    question: 'Time for all n working together:',
+    answer: 't / n',
+    options: ['t / n', 'nt', 't − n', 'n / t', 't(n − 1)', '1/(nt)'],
+    hint: 'Each rate = 1/t. Combined = n/t. Time = 1 ÷ (n/t) = t/n.',
+    historyKey: 'wp:rw:n-machines',
+  },
+  {
+    id: 'rw07', category: 'Rate & Work Setups',
+    display: '"A does a job in a hours. With B, they finish in t hours (t < a)."',
+    question: 'B\'s time alone:',
+    answer: 'at / (a − t)',
+    options: ['at / (a − t)', 'a − t', 'a + t', 'at', '(a + t) / 2', 't / (a − t)'],
+    hint: 'B\'s rate = 1/t − 1/a = (a−t)/(at). B alone = at/(a−t).',
+    historyKey: 'wp:rw:find-unknown-rate',
+  },
+  {
+    id: 'rw08', category: 'Rate & Work Setups',
+    display: '"Pipe A fills a tank in a hours. Pipe B drains it in b hours (b > a). Both run."',
+    question: 'Net fill rate per hour:',
+    answer: '1/a − 1/b',
+    options: ['1/a − 1/b', '1/a + 1/b', '1/(a − b)', '1/(a + b)', 'b/a − 1', '(a + b)/ab'],
+    hint: 'Fill rate minus drain rate: 1/a − 1/b. Since b > a, fill wins and net is positive.',
+    historyKey: 'wp:rw:fill-drain',
+  },
+  {
+    id: 'rw09', category: 'Rate & Work Setups',
+    display: '"A car travels d miles at r mph, then returns at s mph."',
+    question: 'Average speed for the round trip:',
+    answer: '2rs / (r + s)',
+    options: ['2rs / (r + s)', '(r + s) / 2', 'rs / (r + s)', '2d / (r + s)', 'r + s', 'd(r + s) / 2'],
+    hint: 'Average speed = total distance / total time = 2d / (d/r + d/s) = 2rs/(r+s). NOT the simple average!',
+    historyKey: 'wp:rw:avg-speed-round',
+  },
+  {
+    id: 'rw10', category: 'Rate & Work Setups',
+    display: '"A and B work at rates of 1/a and 1/b. A works alone for t hours, then B joins."',
+    question: 'Remaining work when B joins:',
+    answer: '1 − t/a',
+    options: ['1 − t/a', '1 − t/b', 't/a', '1 − t/(a+b)', 't/b', 'a − t'],
+    hint: 'A does t/a of the job alone. Remaining = 1 − t/a (fraction of job left).',
+    historyKey: 'wp:rw:partial-then-join',
+  },
+  {
+    id: 'rw11', category: 'Rate & Work Setups',
+    display: '"Machine A produces x units per hour, Machine B produces y units per hour."',
+    question: 'Time to produce n units together:',
+    answer: 'n / (x + y)',
+    options: ['n / (x + y)', 'n(x + y)', '(x + y) / n', 'nx + ny', 'n / xy', '(nx + ny) / 2'],
+    hint: 'Combined rate = x + y units/hour. Time = work / rate = n / (x + y).',
+    historyKey: 'wp:rw:machine-rate',
+  },
+  {
+    id: 'rw12', category: 'Rate & Work Setups',
+    display: '"A is 50% faster than B. B takes t hours alone."',
+    question: 'A\'s time alone:',
+    answer: '2t/3',
+    options: ['2t/3', 't/2', 't − 0.5', '1.5t', '3t/2', 't/1.5'],
+    hint: '50% faster → A\'s rate is 1.5 × B\'s rate = 1.5/t. A\'s time = 1/(1.5/t) = t/1.5 = 2t/3.',
+    historyKey: 'wp:rw:pct-faster',
+  },
+];
+
+// ── 5. Number Properties ───────────────────────────────────
+
+const numberProperties: WordProblem[] = [
+  {
+    id: 'np01', category: 'Number Properties',
+    display: '"if 0 < x < 1"',
+    question: 'Order x², x, and √x:',
+    answer: 'x² < x < √x',
+    options: ['x² < x < √x', '√x < x < x²', 'x < x² < √x', 'x² < √x < x', 'x = x² = √x', '√x < x² < x'],
+    hint: 'For proper fractions: squaring makes smaller, square root makes larger. E.g. x=0.25: 0.0625 < 0.25 < 0.5.',
+    historyKey: 'wp:np:proper-frac',
+  },
+  {
+    id: 'np02', category: 'Number Properties',
+    display: '"does the fraction p/q (reduced) terminate as a decimal?"',
+    question: 'It terminates if and only if:',
+    answer: 'q has only 2s and 5s as prime factors',
+    options: ['q has only 2s and 5s as prime factors', 'p is divisible by q', 'q is a prime number', 'p < q', 'q is even', 'p and q are coprime'],
+    hint: '1/8 = 0.125 ✓ (8=2³). 1/6 = 0.1666... ✗ (6=2×3). Only 2s and 5s in denominator → terminates.',
+    historyKey: 'wp:np:terminating',
+  },
+  {
+    id: 'np03', category: 'Number Properties',
+    display: '"find the total number of positive factors of n"',
+    question: 'Procedure:',
+    answer: 'Prime factorize, add 1 to each exponent, multiply',
+    options: ['Prime factorize, add 1 to each exponent, multiply', 'Count all primes up to n', 'Divide n by each integer up to √n', 'Sum the prime factors', 'Multiply all exponents together', 'Count primes less than n'],
+    hint: 'E.g. 240 = 2⁴×3¹×5¹ → (4+1)(1+1)(1+1) = 20 factors.',
+    historyKey: 'wp:np:num-factors',
+  },
+  {
+    id: 'np04', category: 'Number Properties',
+    display: '"trailing zeros in n!"',
+    question: 'How do you count them?',
+    answer: 'Count factors of 5: ⌊n/5⌋ + ⌊n/25⌋ + ⌊n/125⌋ + ...',
+    options: ['Count factors of 5: ⌊n/5⌋ + ⌊n/25⌋ + ⌊n/125⌋ + ...', 'n / 10', 'Count factors of 10 in n', 'Count even numbers up to n', 'Count factors of 2: ⌊n/2⌋ + ⌊n/4⌋ + ...', 'n / 5'],
+    hint: 'Trailing zeros = pairs of (2×5). There are always more 2s, so just count 5s. E.g. 25! → 5+1 = 6 zeros.',
+    historyKey: 'wp:np:trailing-zeros',
+  },
+  {
+    id: 'np05', category: 'Number Properties',
+    display: '"GCF of two consecutive integers"',
+    question: 'The GCF is always:',
+    answer: '1',
+    options: ['1', '2', 'The smaller integer', 'It varies', 'The larger integer', 'n'],
+    hint: 'Consecutive integers never share prime factors. GCF(n, n+1) = 1 always.',
+    historyKey: 'wp:np:consec-gcf',
+  },
+  {
+    id: 'np06', category: 'Number Properties',
+    display: '"n is a perfect square"',
+    question: 'What must be true of its prime factorization?',
+    answer: 'All exponents are even',
+    options: ['All exponents are even', 'All prime factors are odd', 'It has an even number of factors', 'All exponents are prime', 'It has an odd number of factors', 'All prime factors are even'],
+    hint: '√(2⁴×3²) = 2²×3¹ = 12. Even exponents → clean square root. E.g. 144 = 2⁴×3².',
+    historyKey: 'wp:np:perfect-sq',
+  },
+  {
+    id: 'np07', category: 'Number Properties',
+    display: '"LCM(a,b) × GCF(a,b)"',
+    question: 'This product always equals:',
+    answer: 'a × b',
+    options: ['a × b', '(a + b)²', 'a² × b²', 'a + b', 'a² + b²', '(a − b)²'],
+    hint: 'LCM × GCF = product of the two numbers. Extremely useful shortcut on GMAT.',
+    historyKey: 'wp:np:lcm-gcf',
+  },
+  {
+    id: 'np08', category: 'Number Properties',
+    display: '"a number divisible by both 2 and 3"',
+    question: 'It must also be divisible by:',
+    answer: '6',
+    options: ['6', '5', '12', '9', '4', '8'],
+    hint: 'Divisible by 2 AND 3 → divisible by LCM(2,3) = 6. Quick divisibility shortcut.',
+    historyKey: 'wp:np:div-2-and-3',
+  },
+  {
+    id: 'np09', category: 'Number Properties',
+    display: '"product of n consecutive integers"',
+    question: 'This product is always divisible by:',
+    answer: 'n!',
+    options: ['n!', 'n', 'n²', '2n', 'n + 1', '(n−1)!'],
+    hint: 'Any n consecutive integers include multiples of 1, 2, ..., n. Product ÷ n! = C(k,n), always an integer.',
+    historyKey: 'wp:np:consec-product',
+  },
+  {
+    id: 'np10', category: 'Number Properties',
+    display: '"sum of n consecutive odd integers starting at 1"',
+    question: 'Sum:',
+    answer: 'n²',
+    options: ['n²', 'n(n+1)', '2n−1', 'n(n+1)/2', '(2n−1)²', 'n(2n−1)'],
+    hint: '1 + 3 + 5 + ... + (2n−1) = n². E.g. 1+3+5+7 = 16 = 4².',
+    historyKey: 'wp:np:sum-odds',
+  },
+  {
+    id: 'np11', category: 'Number Properties',
+    display: '"remainder when n is divided by d"',
+    question: 'Express n in terms of d and remainder r:',
+    answer: 'n = dq + r, where 0 ≤ r < d',
+    options: ['n = dq + r, where 0 ≤ r < d', 'n = d/q + r', 'n = dr + q', 'n − r = d', 'r = n × d', 'n = d + qr'],
+    hint: 'Division algorithm: dividend = divisor × quotient + remainder. n = dq + r, 0 ≤ r < d.',
+    historyKey: 'wp:np:division-algo',
+  },
+  {
+    id: 'np12', category: 'Number Properties',
+    display: '"units digit of 7⁴"',
+    question: 'The units digit cycles as:',
+    answer: '7, 9, 3, 1 (cycle of 4)',
+    options: ['7, 9, 3, 1 (cycle of 4)', '7, 4, 8, 6 (cycle of 4)', '7, 7, 7, 7 (always 7)', '7, 9, 1, 3 (cycle of 4)', '7, 4, 1, 0 (cycle of 4)', '7, 9, 3, 1, 7, 9 (cycle of 6)'],
+    hint: '7¹=7, 7²=49, 7³=343, 7⁴=2401. Units: 7,9,3,1 cycle. 7⁴ ends in 1.',
+    historyKey: 'wp:np:units-digit-cycle',
+  },
+];
+
+// ── Export all ──────────────────────────────────────────────
+
+export const ALL_WORD_PROBLEMS: WordProblem[] = [
+  ...vocabulary,
+  ...percentKeywords,
+  ...inequalities,
+  ...rateWorkFormulas,
+  ...numberProperties,
+];
