@@ -11,6 +11,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -29,7 +30,7 @@ const PRIMES_DEFAULTS: ModeSettings = {
 
 export default function PrimesHub() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isWork } = useTheme();
 
   const [settings, setSettings] = useState<ModeSettings>(PRIMES_DEFAULTS);
   const [showSettings, setShowSettings] = useState(false);
@@ -79,11 +80,12 @@ export default function PrimesHub() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SpreadsheetChrome>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={[styles.back, { color: colors.primary }]}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>Prime Traps</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Risk Assessment' : 'Prime Traps'}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -186,6 +188,7 @@ export default function PrimesHub() {
           </View>
         </View>
       </Modal>
+    </SpreadsheetChrome>
     </SafeAreaView>
   );
 }

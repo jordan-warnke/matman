@@ -9,12 +9,13 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KnownToggle from '../../components/KnownToggle';
 import NumberPad from '../../components/NumberPad';
-import ReferenceOverlay, { SwipeHint } from '../../components/ReferenceOverlay';
-import StruggleToggle from '../../components/StruggleToggle';
+import PeekHint from '../../components/PeekHint';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     checkAnswer,
     FDP_TABLE,
@@ -31,13 +32,9 @@ import {
     GameType,
     History,
     loadHistory,
-    loadKnown,
     loadModeSettings,
-    loadStruggles,
     ModeSettings,
     recordByKey,
-    toggleKnown,
-    toggleStruggle,
 } from '../../store/HistoryStore';
 
 
@@ -55,7 +52,7 @@ interface FDPProblem {
 
 export default function FDPGameScreen() {
   const router = useRouter();
-  const { colors, timed, multipleChoice } = useTheme();
+  const { colors, timed, multipleChoice, isWork } = useTheme();
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType = (type || 'fdp-time-attack') as GameType;
 
@@ -63,20 +60,14 @@ export default function FDPGameScreen() {
   const [ready, setReady] = useState(false);
 
   const historyRef = useRef<History>({});
-  const strugglesRef = useRef<Set<string>>(new Set());
-  const knownRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([
       loadModeSettings(gameType),
       loadHistory(),
-      loadStruggles(),
-      loadKnown(),
-    ]).then(([s, h, str, kn]) => {
+    ]).then(([s, h]) => {
       setSettings(s);
       historyRef.current = h;
-      strugglesRef.current = str;
-      knownRef.current = kn;
       setReady(true);
     });
   }, [gameType]);
@@ -91,15 +82,16 @@ export default function FDPGameScreen() {
   const [timer, setTimer] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
-  const [currentStruggling, setCurrentStruggling] = useState(false);
-  const [currentKnown, setCurrentKnown] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
   const pausedRef = useRef(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const submittedRef = useRef(false);
+  const graceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceReadyRef = useRef(0);
 
   // ── problem generator ──
   const generate = useCallback((): FDPProblem => {
@@ -118,7 +110,7 @@ export default function FDPGameScreen() {
         ({ source, target } = pickFormats());
       }
       const key = `fdp:${entry.fraction}:${target}`;
-      const weight = ankiWeight(history[key], strugglesRef.current.has(key), knownRef.current.has(key));
+      const weight = ankiWeight(history[key]);
       return { entry, source, target, weight };
     });
 
@@ -149,6 +141,7 @@ export default function FDPGameScreen() {
   // ── start per-problem timer ──
   const startProblemTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
     pausedRef.current = false;
     submittedRef.current = false;
     const deadline = Date.now() + settings.timeAttackSeconds * 1000;
@@ -159,14 +152,17 @@ export default function FDPGameScreen() {
       if (remaining <= 0) {
         clearInterval(timerRef.current!);
         timerRef.current = null;
-        if (submittedRef.current) return;
-        submittedRef.current = true;
-        pausedRef.current = true;
         setTimer(0);
-        setFeedback('wrong');
-        setStreak(0);
-        setAnswered((c) => c + 1);
-        setAwaitingNext(true);
+        graceTimeoutRef.current = setTimeout(() => {
+          if (submittedRef.current) return;
+          submittedRef.current = true;
+          pausedRef.current = true;
+          setFeedback('wrong');
+          setStreak(0);
+          setAnswered((c) => c + 1);
+          setAwaitingNext(true);
+          advanceReadyRef.current = Date.now() + 500;
+        }, 200);
       } else {
         setTimer(remaining);
       }
@@ -179,13 +175,14 @@ export default function FDPGameScreen() {
     const p = generate();
     setProblem(p);
     problemStartRef.current = Date.now();
-    setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-    setCurrentKnown(knownRef.current.has(p.historyKey));
 
     if (timed) {
       startProblemTimer();
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (graceTimeoutRef.current) clearTimeout(graceTimeoutRef.current);
+    };
   }, [ready]);
 
   const triggerShake = useCallback(() => {
@@ -209,33 +206,48 @@ export default function FDPGameScreen() {
 
       pausedRef.current = true;
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
+      hidePeek();
 
-      await recordByKey(problem.historyKey, isCorrect, elapsed);
+      const recordedCorrect = isCorrect && !peekUsed;
+      await recordByKey(problem.historyKey, recordedCorrect, elapsed);
       historyRef.current = await loadHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
         setFeedback('correct');
-        setStreak((s) => s + 1);
-        setCorrectCount((c) => c + 1);
+        if (peekUsed) { setStreak(0); } else { setStreak((s) => s + 1); }
+        if (!peekUsed) setCorrectCount((c) => c + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        advanceReadyRef.current = Date.now() + 500;
         setAwaitingNext(true);
       } else {
         setFeedback('wrong');
         triggerShake();
         setStreak(0);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        advanceReadyRef.current = Date.now() + 500;
         setAwaitingNext(true);
       }
     },
-    [problem, feedback, gameOver, generate, triggerShake],
+    [problem, feedback, gameOver, generate, triggerShake, hidePeek, peekUsed],
   );
 
   const handleInputSubmit = useCallback(() => {
     if (input.trim()) submit(input.trim());
   }, [input, submit]);
 
+  const handleWebInputKey = useCallback((key: string) => {
+    if (!/^[0-9./-]$/.test(key)) return;
+    setInput((prev) => prev + key);
+  }, []);
+
+  const handleWebBackspace = useCallback(() => {
+    setInput((prev) => prev.slice(0, -1));
+  }, []);
+
   const advanceNext = useCallback(() => {
+    if (Date.now() < advanceReadyRef.current) return;
     if (settings.problemCount > 0 && answered >= settings.problemCount) {
       setGameOver(true);
       return;
@@ -247,27 +259,10 @@ export default function FDPGameScreen() {
     setFeedback('none');
     setAwaitingNext(false);
     setSelectedOption(null);
-    setCurrentStruggling(strugglesRef.current.has(next.historyKey));
-    setCurrentKnown(knownRef.current.has(next.historyKey));
+    resetPeek();
     submittedRef.current = false;
     if (timed) startProblemTimer();
-  }, [generate, answered, settings.problemCount, timed, startProblemTimer]);
-
-  const handleToggleStruggle = useCallback(async () => {
-    if (!problem) return;
-    const nowStruggling = await toggleStruggle(problem.historyKey);
-    setCurrentStruggling(nowStruggling);
-    strugglesRef.current = await loadStruggles();
-    if (nowStruggling) { knownRef.current = await loadKnown(); setCurrentKnown(false); }
-  }, [problem]);
-
-  const handleToggleKnown = useCallback(async () => {
-    if (!problem) return;
-    const nowKnown = await toggleKnown(problem.historyKey);
-    setCurrentKnown(nowKnown);
-    knownRef.current = await loadKnown();
-    if (nowKnown) { strugglesRef.current = await loadStruggles(); setCurrentStruggling(false); }
-  }, [problem]);
+  }, [generate, answered, settings.problemCount, timed, startProblemTimer, resetPeek]);
 
   const repeatQuestion = useCallback(() => {
     if (problem) {
@@ -278,15 +273,35 @@ export default function FDPGameScreen() {
     setAwaitingNext(false);
     setInput('');
     setSelectedOption(null);
+    resetPeek();
     submittedRef.current = false;
     problemStartRef.current = Date.now();
     if (timed) startProblemTimer();
-  }, [timed, startProblemTimer, problem]);
+  }, [timed, startProblemTimer, problem, resetPeek]);
 
   const feedbackColor =
     feedback === 'correct' ? colors.correct
       : feedback === 'wrong' ? colors.error
         : colors.text;
+
+  const workFormula = problem
+    ? `${problem.displayValue} → ${formatLabel(problem.targetFormat)}`
+    : '';
+
+  useWebShortcuts(
+    problem && multipleChoice
+      ? problem.options.map(opt =>
+          feedback !== 'none' && opt === problem.correctAnswer ? advanceNext
+          : feedback !== 'none' ? null
+          : () => submit(opt))
+      : [],
+    awaitingNext ? advanceNext : undefined,
+    !multipleChoice && !awaitingNext ? handleInputSubmit : undefined,
+    !multipleChoice && !awaitingNext && feedback === 'none' ? handleWebInputKey : undefined,
+    !multipleChoice && !awaitingNext && feedback === 'none' ? handleWebBackspace : undefined,
+    !awaitingNext && feedback === 'none' ? showPeek : undefined,
+    peekVisible ? hidePeek : undefined,
+  );
 
   if (!ready || !problem) {
     return (
@@ -308,12 +323,11 @@ export default function FDPGameScreen() {
       setInput('');
       setFeedback('none');
       setAwaitingNext(false);
+      resetPeek();
       submittedRef.current = false;
       const p = generate();
       setProblem(p);
       problemStartRef.current = Date.now();
-      setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-      setCurrentKnown(knownRef.current.has(p.historyKey));
       if (timed) startProblemTimer();
     };
     return (
@@ -343,8 +357,27 @@ export default function FDPGameScreen() {
   }
 
   return (
-    <ReferenceOverlay>
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
+    <SpreadsheetChrome
+      formula={workFormula}
+      cellRef="C5"
+      options={multipleChoice ? problem.options.map((opt) => ({
+        label: String(opt),
+        onPress: () => submit(opt),
+      })) : undefined}
+      inputValue={!multipleChoice ? input : undefined}
+      onInputChange={!multipleChoice ? (v) => setInput(v) : undefined}
+      onInputSubmit={!multipleChoice ? handleInputSubmit : undefined}
+      feedbackState={feedback === 'none' ? null : feedback}
+      correctAnswer={String(problem.correctAnswer)}
+      peekValue={String(problem.correctAnswer)}
+      peekVisible={peekVisible && feedback === 'none'}
+      selectedValue={selectedOption ? String(selectedOption) : undefined}
+      onBack={() => router.back()}
+      onNext={awaitingNext ? advanceNext : undefined}
+      onRepeat={awaitingNext ? repeatQuestion : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -365,20 +398,32 @@ export default function FDPGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
-        <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-          <Text style={[styles.problemText, { color: feedbackColor }]}>
-            {problem.displayValue}
+        <View style={styles.problemInlineRow}>
+          <View style={styles.promptBlock}>
+            <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+              <Text style={[styles.problemText, { color: feedbackColor }]}> 
+                {problem.displayValue}
+              </Text>
+            </Animated.View>
+            <Text style={[styles.questionText, { color: colors.muted }]}> 
+              As a {formatLabel(problem.targetFormat)}?
+            </Text>
+          </View>
+          <Text
+            style={[
+              styles.inlineReveal,
+              {
+                color: feedback !== 'none'
+                  ? colors.correct
+                  : peekVisible
+                  ? colors.primary
+                  : 'transparent',
+              },
+            ]}
+          >
+            = {problem.correctAnswer}
           </Text>
-        </Animated.View>
-        <Text style={[styles.questionText, { color: colors.muted }]}>
-          As a {formatLabel(problem.targetFormat)}?
-        </Text>
-        {feedback === 'wrong' && selectedOption && (
-          <Text style={[styles.correctHint, { color: colors.error }]}>✗ {selectedOption}</Text>
-        )}
-        {feedback !== 'none' && (
-          <Text style={[styles.correctHint, { color: colors.correct }]}>= {problem.correctAnswer}</Text>
-        )}
+        </View>
       </View>
 
       {/* Answer area */}
@@ -395,8 +440,8 @@ export default function FDPGameScreen() {
                   feedback === 'wrong' && opt === problem.correctAnswer && { borderColor: colors.error, backgroundColor: colors.background },
                 ]}
                 activeOpacity={0.7}
-                onPress={() => submit(opt)}
-                disabled={feedback !== 'none'}
+                onPress={feedback !== 'none' && opt === problem.correctAnswer ? advanceNext : () => submit(opt)}
+                disabled={feedback !== 'none' && opt !== problem.correctAnswer}
               >
                 <Text style={[styles.mcText, { color: colors.text }]}>{opt}</Text>
               </TouchableOpacity>
@@ -445,16 +490,10 @@ export default function FDPGameScreen() {
       </View>
 
       <View style={styles.footer}>
-        <SwipeHint />
-        {awaitingNext && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StruggleToggle isStruggling={currentStruggling} onToggle={handleToggleStruggle} />
-            <KnownToggle isKnown={currentKnown} onToggle={handleToggleKnown} />
-          </View>
-        )}
+        <PeekHint />
       </View>
+    </SpreadsheetChrome>
     </SafeAreaView>
-    </ReferenceOverlay>
   );
 }
 
@@ -489,9 +528,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
+  problemInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
+  promptBlock: {
+    alignItems: 'center',
+    flexShrink: 1,
+  },
   problemText: { fontSize: 48, fontWeight: '900', letterSpacing: -1 },
   questionText: { ...Font.h3, marginTop: Spacing.sm },
-  correctHint: { ...Font.h2, marginTop: Spacing.sm },
+  inlineReveal: { ...Font.h2, minWidth: 88, textAlign: 'left' },
 
   answerArea: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg },
 

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GameSettingsModal, { SettingsFields } from '../../components/GameSettingsModal';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -55,7 +56,7 @@ const FIELDS: SettingsFields = { timePerProblem: true, problemCount: true };
 
 export default function FDPHub() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isWork } = useTheme();
 
   const [settingsMode, setSettingsMode] = useState<GameType | null>(null);
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
@@ -68,11 +69,12 @@ export default function FDPHub() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SpreadsheetChrome>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={[styles.back, { color: colors.primary }]}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>FDP Conversions</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Conversion Rates' : 'FDP Conversions'}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -113,6 +115,7 @@ export default function FDPHub() {
           fields={FIELDS}
         />
       )}
+    </SpreadsheetChrome>
     </SafeAreaView>
   );
 }

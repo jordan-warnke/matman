@@ -11,6 +11,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -26,7 +27,7 @@ const SIGN_TYPE: GameType = 'sign-drill';
 
 export default function ParityHub() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isWork } = useTheme();
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
@@ -63,11 +64,12 @@ export default function ParityHub() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SpreadsheetChrome>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={[styles.back, { color: colors.primary }]}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>Parity & Sign</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Variance Report' : 'Parity & Sign'}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -177,6 +179,7 @@ export default function ParityHub() {
           </View>
         </View>
       </Modal>
+    </SpreadsheetChrome>
     </SafeAreaView>
   );
 }

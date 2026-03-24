@@ -9,11 +9,13 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KnownToggle from '../../components/KnownToggle';
-import ReferenceOverlay, { SwipeHint } from '../../components/ReferenceOverlay';
-import StruggleToggle from '../../components/StruggleToggle';
+import MathText from '../../components/MathText';
+import PeekHint from '../../components/PeekHint';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import { ALL_DATASTATS_PROBLEMS, DataStatsProblem, shuffleDataStatsOptions } from '../../data/datastats';
 import {
     ankiWeight,
@@ -21,36 +23,28 @@ import {
     GameType,
     History,
     loadHistory,
-    loadKnown,
     loadModeSettings,
-    loadStruggles,
     ModeSettings,
     recordByKey,
-    toggleKnown,
-    toggleStruggle,
 } from '../../store/HistoryStore';
 
 type Feedback = 'none' | 'correct' | 'wrong';
 
 export default function DataStatsGameScreen() {
   const router = useRouter();
-  const { colors, timed } = useTheme();
+  const { colors, timed, isWork } = useTheme();
   const gameType: GameType = 'datastats-drill';
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
   const historyRef = useRef<History>({});
-  const strugglesRef = useRef<Set<string>>(new Set());
-  const knownRef = useRef<Set<string>>(new Set());
   const recentRef = useRef<string[]>([]);
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory(), loadStruggles(), loadKnown()]).then(([s, h, str, kn]) => {
+    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
       setSettings(s);
       historyRef.current = h;
-      strugglesRef.current = str;
-      knownRef.current = kn;
       setReady(true);
     });
   }, [gameType]);
@@ -66,7 +60,7 @@ export default function DataStatsGameScreen() {
     let best: typeof candidates[0] = candidates[0];
     let bestW = -1;
     for (const item of candidates) {
-      const w = ankiWeight(history[item.historyKey], strugglesRef.current.has(item.historyKey), knownRef.current.has(item.historyKey)) * (0.5 + Math.random());
+      const w = ankiWeight(history[item.historyKey]) * (0.5 + Math.random());
       if (w > bestW) { bestW = w; best = item; }
     }
 
@@ -82,14 +76,15 @@ export default function DataStatsGameScreen() {
   const [timer, setTimer] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
-  const [currentStruggling, setCurrentStruggling] = useState(false);
-  const [currentKnown, setCurrentKnown] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
   const pausedRef = useRef(false);
   const submittedRef = useRef(false);
+  const graceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceReadyRef = useRef(0);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -100,6 +95,7 @@ export default function DataStatsGameScreen() {
 
   const startProblemTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
     pausedRef.current = false;
     submittedRef.current = false;
     const deadline = Date.now() + settings.timeAttackSeconds * 1000;
@@ -110,14 +106,17 @@ export default function DataStatsGameScreen() {
       if (remaining <= 0) {
         clearInterval(timerRef.current!);
         timerRef.current = null;
-        if (submittedRef.current) return;
-        submittedRef.current = true;
-        pausedRef.current = true;
         setTimer(0);
-        setFeedback('wrong');
-        setStreak(0);
-        setAnswered((c) => c + 1);
-        setAwaitingNext(true);
+        graceTimeoutRef.current = setTimeout(() => {
+          if (submittedRef.current) return;
+          submittedRef.current = true;
+          pausedRef.current = true;
+          setFeedback('wrong');
+          setStreak(0);
+          setAnswered((c) => c + 1);
+          setAwaitingNext(true);
+          advanceReadyRef.current = Date.now() + 500;
+        }, 200);
       } else {
         setTimer(remaining);
       }
@@ -129,10 +128,11 @@ export default function DataStatsGameScreen() {
     const p = generate();
     setProblem(p);
     problemStartRef.current = Date.now();
-    setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-    setCurrentKnown(knownRef.current.has(p.historyKey));
     if (timed) startProblemTimer();
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (graceTimeoutRef.current) clearTimeout(graceTimeoutRef.current);
+    };
   }, [ready]);
 
   const triggerShake = useCallback(() => {
@@ -155,15 +155,18 @@ export default function DataStatsGameScreen() {
 
       pausedRef.current = true;
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
+      hidePeek();
 
-      await recordByKey(problem.historyKey, isCorrect, elapsed);
+      const recordedCorrect = isCorrect && !peekUsed;
+      await recordByKey(problem.historyKey, recordedCorrect, elapsed);
       historyRef.current = await loadHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
         setFeedback('correct');
-        setStreak((s) => s + 1);
-        setCorrectCount((c) => c + 1);
+        if (peekUsed) { setStreak(0); } else { setStreak((s) => s + 1); }
+        if (!peekUsed) setCorrectCount((c) => c + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setFeedback('wrong');
@@ -172,12 +175,14 @@ export default function DataStatsGameScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
 
+      advanceReadyRef.current = Date.now() + 500;
       setAwaitingNext(true);
     },
-    [problem, feedback, gameOver, triggerShake],
+    [problem, feedback, gameOver, triggerShake, hidePeek, peekUsed],
   );
 
   const advanceNext = useCallback(() => {
+    if (Date.now() < advanceReadyRef.current) return;
     if (settings.problemCount > 0 && answered >= settings.problemCount) {
       setGameOver(true);
       return;
@@ -188,28 +193,11 @@ export default function DataStatsGameScreen() {
     setFeedback('none');
     setAwaitingNext(false);
     setSelectedOption(null);
-    setCurrentStruggling(strugglesRef.current.has(next.historyKey));
-    setCurrentKnown(knownRef.current.has(next.historyKey));
+    resetPeek();
     submittedRef.current = false;
     popIn();
     if (timed) startProblemTimer();
-  }, [generate, answered, settings.problemCount, timed, startProblemTimer, popIn]);
-
-  const handleToggleStruggle = useCallback(async () => {
-    if (!problem) return;
-    const nowStruggling = await toggleStruggle(problem.historyKey);
-    setCurrentStruggling(nowStruggling);
-    strugglesRef.current = await loadStruggles();
-    if (nowStruggling) { knownRef.current = await loadKnown(); setCurrentKnown(false); }
-  }, [problem]);
-
-  const handleToggleKnown = useCallback(async () => {
-    if (!problem) return;
-    const nowKnown = await toggleKnown(problem.historyKey);
-    setCurrentKnown(nowKnown);
-    knownRef.current = await loadKnown();
-    if (nowKnown) { strugglesRef.current = await loadStruggles(); setCurrentStruggling(false); }
-  }, [problem]);
+  }, [generate, answered, settings.problemCount, timed, startProblemTimer, popIn, resetPeek]);
 
   const repeatQuestion = useCallback(() => {
     if (problem) {
@@ -223,15 +211,35 @@ export default function DataStatsGameScreen() {
     setFeedback('none');
     setAwaitingNext(false);
     setSelectedOption(null);
+    resetPeek();
     submittedRef.current = false;
     problemStartRef.current = Date.now();
     if (timed) startProblemTimer();
-  }, [timed, startProblemTimer, problem]);
+  }, [timed, startProblemTimer, problem, resetPeek]);
 
   const feedbackColor =
     feedback === 'correct' ? colors.correct
       : feedback === 'wrong' ? colors.error
         : colors.text;
+
+  const workFormula = problem
+    ? problem.display
+    : '';
+
+  useWebShortcuts(
+    problem
+      ? problem.options.map(opt =>
+          feedback !== 'none' && opt === problem.answer ? advanceNext
+          : feedback !== 'none' ? null
+          : () => answer(opt))
+      : [],
+    awaitingNext ? advanceNext : undefined,
+    undefined,
+    undefined,
+    undefined,
+    !awaitingNext && feedback === 'none' ? showPeek : undefined,
+    peekVisible ? hidePeek : undefined,
+  );
 
   if (!ready || !problem) {
     return (
@@ -253,12 +261,11 @@ export default function DataStatsGameScreen() {
       setFeedback('none');
       setAwaitingNext(false);
       setSelectedOption(null);
+      resetPeek();
       submittedRef.current = false;
       const p = generate();
       setProblem(p);
       problemStartRef.current = Date.now();
-      setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-      setCurrentKnown(knownRef.current.has(p.historyKey));
       if (timed) startProblemTimer();
     };
     return (
@@ -288,8 +295,24 @@ export default function DataStatsGameScreen() {
   }
 
   return (
-    <ReferenceOverlay>
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
+    <SpreadsheetChrome
+      formula={workFormula}
+      cellRef="D5"
+      options={problem.options.map(opt => ({
+        label: opt,
+        onPress: () => answer(opt),
+      }))}
+      feedbackState={feedback === 'none' ? null : feedback}
+      correctAnswer={problem.answer}
+      peekValue={problem.answer}
+      peekVisible={peekVisible && feedback === 'none'}
+      selectedValue={selectedOption ?? undefined}
+      onBack={() => router.back()}
+      onNext={awaitingNext ? advanceNext : undefined}
+      onRepeat={awaitingNext ? repeatQuestion : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -310,31 +333,29 @@ export default function DataStatsGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
-        <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
-          <Text style={[styles.displayText, { color: feedbackColor }]}>
-            {problem.display}
-          </Text>
-          <Text style={[styles.questionText, { color: colors.text }]}>
-            {problem.question}
-          </Text>
-        </Animated.View>
-        {feedback === 'correct' && (
-          <Text style={[styles.answerText, { color: colors.correct }]}>
-            ✓ {problem.answer}
-          </Text>
-        )}
-        {feedback === 'wrong' && (
-          <>
-            {selectedOption && (
-              <Text style={[styles.answerText, { color: colors.error }]}>
-                ✗ {selectedOption}
+        <View style={styles.problemInlineRow}>
+          <View style={styles.promptBlock}>
+            <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
+              <MathText text={problem.display} style={[styles.displayText, { color: feedbackColor }]} />
+              <Text style={[styles.questionText, { color: colors.text }]}> 
+                {problem.question}
               </Text>
-            )}
-            <Text style={[styles.answerText, { color: colors.correct }]}>
-              ✓ {problem.answer}
-            </Text>
-          </>
-        )}
+            </Animated.View>
+          </View>
+          <MathText
+            text={`= ${problem.answer}`}
+            style={[
+              styles.inlineReveal,
+              {
+                color: feedback !== 'none'
+                  ? colors.correct
+                  : peekVisible
+                  ? colors.primary
+                  : 'transparent',
+              },
+            ]}
+          />
+        </View>
       </View>
 
       {/* MC options */}
@@ -362,12 +383,16 @@ export default function DataStatsGameScreen() {
               key={i}
               style={[styles.optionBtn, optStyle]}
               activeOpacity={0.7}
-              onPress={() => answer(option)}
-              disabled={feedback !== 'none'}
+              onPress={feedback !== 'none' && isCorrectOption ? advanceNext : () => answer(option)}
+              disabled={feedback !== 'none' && !isCorrectOption}
             >
-              <Text style={[styles.optionText, { color: textColor }]} numberOfLines={2}>
-                {option}
-              </Text>
+              <MathText
+                text={option}
+                style={[styles.optionText, { color: textColor }]}
+                containerStyle={styles.optionContent}
+                compact
+                numberOfLines={2}
+              />
             </TouchableOpacity>
           );
         })}
@@ -392,16 +417,10 @@ export default function DataStatsGameScreen() {
       </View>
 
       <View style={styles.footer}>
-        <SwipeHint />
-        {awaitingNext && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StruggleToggle isStruggling={currentStruggling} onToggle={handleToggleStruggle} />
-            <KnownToggle isKnown={currentKnown} onToggle={handleToggleKnown} />
-          </View>
-        )}
+        <PeekHint />
       </View>
+    </SpreadsheetChrome>
     </SafeAreaView>
-    </ReferenceOverlay>
   );
 }
 
@@ -435,9 +454,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
+  problemInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
+  promptBlock: {
+    alignItems: 'center',
+    flexShrink: 1,
+  },
   displayText: { fontSize: 30, fontWeight: '900', textAlign: 'center', marginBottom: Spacing.md },
   questionText: { ...Font.h3, textAlign: 'center', marginBottom: Spacing.sm },
-  answerText: { ...Font.h2, textAlign: 'center', marginTop: Spacing.sm },
+  inlineReveal: { ...Font.h2, minWidth: 72, textAlign: 'left' },
 
   optionsArea: {
     paddingHorizontal: Spacing.xl,
@@ -457,6 +486,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  optionContent: { width: '100%', justifyContent: 'center' },
 
   nextBtn: {
     borderRadius: 20,

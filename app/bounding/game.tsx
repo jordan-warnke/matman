@@ -9,11 +9,12 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KnownToggle from '../../components/KnownToggle';
-import ReferenceOverlay, { SwipeHint } from '../../components/ReferenceOverlay';
-import StruggleToggle from '../../components/StruggleToggle';
+import PeekHint from '../../components/PeekHint';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import { BoundingProblem, BoundOp, generateBoundingProblem } from '../../data/bounding';
 import {
     ankiWeight,
@@ -21,13 +22,9 @@ import {
     GameType,
     History,
     loadHistory,
-    loadKnown,
     loadModeSettings,
-    loadStruggles,
     ModeSettings,
     recordByKey,
-    toggleKnown,
-    toggleStruggle,
 } from '../../store/HistoryStore';
 
 
@@ -35,7 +32,7 @@ type Feedback = 'none' | 'correct' | 'wrong';
 
 export default function BoundingGameScreen() {
   const router = useRouter();
-  const { colors, timed } = useTheme();
+  const { colors, timed, isWork } = useTheme();
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType = (type || 'bound-time-attack') as GameType;
 
@@ -43,15 +40,11 @@ export default function BoundingGameScreen() {
   const [ready, setReady] = useState(false);
 
   const historyRef = useRef<History>({});
-  const strugglesRef = useRef<Set<string>>(new Set());
-  const knownRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory(), loadStruggles(), loadKnown()]).then(([s, h, str, kn]) => {
+    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
       setSettings(s);
       historyRef.current = h;
-      strugglesRef.current = str;
-      knownRef.current = kn;
       setReady(true);
     });
   }, [gameType]);
@@ -64,15 +57,16 @@ export default function BoundingGameScreen() {
   const [timer, setTimer] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
-  const [currentStruggling, setCurrentStruggling] = useState(false);
-  const [currentKnown, setCurrentKnown] = useState(false);
   const [userAnswer, setUserAnswer] = useState<BoundOp | null>(null);
+  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const recentRef = useRef<string[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
   const pausedRef = useRef(false);
   const submittedRef = useRef(false);
+  const graceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceReadyRef = useRef(0);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -94,7 +88,7 @@ export default function BoundingGameScreen() {
     let best = pool[0];
     let bestW = -1;
     for (const c of pool) {
-      let w = ankiWeight(history[c.historyKey], strugglesRef.current.has(c.historyKey), knownRef.current.has(c.historyKey)) * (0.5 + Math.random());
+      let w = ankiWeight(history[c.historyKey]) * (0.5 + Math.random());
       if (w > bestW) { bestW = w; best = c; }
     }
 
@@ -104,6 +98,7 @@ export default function BoundingGameScreen() {
 
   const startProblemTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
     pausedRef.current = false;
     submittedRef.current = false;
     const deadline = Date.now() + settings.timeAttackSeconds * 1000;
@@ -114,14 +109,17 @@ export default function BoundingGameScreen() {
       if (remaining <= 0) {
         clearInterval(timerRef.current!);
         timerRef.current = null;
-        if (submittedRef.current) return;
-        submittedRef.current = true;
-        pausedRef.current = true;
         setTimer(0);
-        setFeedback('wrong');
-        setStreak(0);
-        setAnswered((c) => c + 1);
-        setAwaitingNext(true);
+        graceTimeoutRef.current = setTimeout(() => {
+          if (submittedRef.current) return;
+          submittedRef.current = true;
+          pausedRef.current = true;
+          setFeedback('wrong');
+          setStreak(0);
+          setAnswered((c) => c + 1);
+          setAwaitingNext(true);
+          advanceReadyRef.current = Date.now() + 500;
+        }, 200);
       } else {
         setTimer(remaining);
       }
@@ -133,10 +131,11 @@ export default function BoundingGameScreen() {
     const p = generateWeighted();
     setProblem(p);
     problemStartRef.current = Date.now();
-    setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-    setCurrentKnown(knownRef.current.has(p.historyKey));
     if (timed) startProblemTimer();
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (graceTimeoutRef.current) clearTimeout(graceTimeoutRef.current);
+    };
   }, [ready]);
 
   const triggerShake = useCallback(() => {
@@ -159,15 +158,18 @@ export default function BoundingGameScreen() {
 
       pausedRef.current = true;
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
+      hidePeek();
 
-      await recordByKey(problem.historyKey, isCorrect, elapsed);
+      const recordedCorrect = isCorrect && !peekUsed;
+      await recordByKey(problem.historyKey, recordedCorrect, elapsed);
       historyRef.current = await loadHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
         setFeedback('correct');
-        setStreak((s) => s + 1);
-        setCorrectCount((c) => c + 1);
+        if (peekUsed) { setStreak(0); } else { setStreak((s) => s + 1); }
+        if (!peekUsed) setCorrectCount((c) => c + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setFeedback('wrong');
@@ -176,12 +178,14 @@ export default function BoundingGameScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
 
+      advanceReadyRef.current = Date.now() + 500;
       setAwaitingNext(true);
     },
-    [problem, feedback, gameOver, answered, settings.problemCount, timed, startProblemTimer, triggerShake, popIn],
+    [problem, feedback, gameOver, answered, settings.problemCount, timed, startProblemTimer, triggerShake, popIn, hidePeek, peekUsed],
   );
 
   const advanceNext = useCallback(() => {
+    if (Date.now() < advanceReadyRef.current) return;
     if (settings.problemCount > 0 && answered >= settings.problemCount) {
       setGameOver(true);
       return;
@@ -192,42 +196,49 @@ export default function BoundingGameScreen() {
     setFeedback('none');
     setAwaitingNext(false);
     setUserAnswer(null);
-    setCurrentStruggling(strugglesRef.current.has(next.historyKey));
-    setCurrentKnown(knownRef.current.has(next.historyKey));
+    resetPeek();
     submittedRef.current = false;
     popIn();
     if (timed) startProblemTimer();
-  }, [answered, settings.problemCount, timed, startProblemTimer, popIn]);
-
-  const handleToggleStruggle = useCallback(async () => {
-    if (!problem) return;
-    const nowStruggling = await toggleStruggle(problem.historyKey);
-    setCurrentStruggling(nowStruggling);
-    strugglesRef.current = await loadStruggles();
-    if (nowStruggling) { knownRef.current = await loadKnown(); setCurrentKnown(false); }
-  }, [problem]);
-
-  const handleToggleKnown = useCallback(async () => {
-    if (!problem) return;
-    const nowKnown = await toggleKnown(problem.historyKey);
-    setCurrentKnown(nowKnown);
-    knownRef.current = await loadKnown();
-    if (nowKnown) { strugglesRef.current = await loadStruggles(); setCurrentStruggling(false); }
-  }, [problem]);
+  }, [answered, settings.problemCount, timed, startProblemTimer, popIn, resetPeek]);
 
   const repeatQuestion = useCallback(() => {
     setFeedback('none');
     setAwaitingNext(false);
     setUserAnswer(null);
+    resetPeek();
     submittedRef.current = false;
     problemStartRef.current = Date.now();
     if (timed) startProblemTimer();
-  }, [timed, startProblemTimer]);
+  }, [timed, startProblemTimer, resetPeek]);
 
   const feedbackColor =
     feedback === 'correct' ? colors.correct
       : feedback === 'wrong' ? colors.error
         : colors.text;
+
+  const workFormula = problem
+    ? `${problem.display}  vs  ${problem.benchmark.toLocaleString()}`
+    : '';
+
+  useWebShortcuts(
+    problem
+      ? [
+          feedback !== 'none' && problem.answer === '<' ? advanceNext
+          : feedback !== 'none' ? null
+          : () => answer('<'),
+          feedback !== 'none' && problem.answer === '>' ? advanceNext
+          : feedback !== 'none' ? null
+          : () => answer('>'),
+        ]
+      : [],
+    awaitingNext ? advanceNext : undefined,
+    undefined,
+    undefined,
+    undefined,
+    !awaitingNext && feedback === 'none' ? showPeek : undefined,
+    peekVisible ? hidePeek : undefined,
+  );
 
   if (!ready || !problem) {
     return (
@@ -248,12 +259,11 @@ export default function BoundingGameScreen() {
       setStreak(0);
       setFeedback('none');
       setAwaitingNext(false);
+      resetPeek();
       submittedRef.current = false;
       const p = generateWeighted();
       setProblem(p);
       problemStartRef.current = Date.now();
-      setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-      setCurrentKnown(knownRef.current.has(p.historyKey));
       if (timed) startProblemTimer();
     };
     return (
@@ -283,8 +293,24 @@ export default function BoundingGameScreen() {
   }
 
   return (
-    <ReferenceOverlay>
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
+    <SpreadsheetChrome
+      formula={workFormula}
+      cellRef="E5"
+      options={[
+        { label: '<', onPress: () => answer('<') },
+        { label: '>', onPress: () => answer('>') },
+      ]}
+      feedbackState={feedback === 'none' ? null : feedback}
+      correctAnswer={String(problem.answer)}
+      peekValue={String(problem.answer)}
+      peekVisible={peekVisible && feedback === 'none'}
+      selectedValue={userAnswer || undefined}
+      onBack={() => router.back()}
+      onNext={awaitingNext ? advanceNext : undefined}
+      onRepeat={awaitingNext ? repeatQuestion : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -305,17 +331,27 @@ export default function BoundingGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
-        <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
-          <Text style={[styles.problemText, { color: feedbackColor }]}>
-            {problem.display}  vs  {problem.benchmark.toLocaleString()}
+        <View style={styles.problemInlineRow}>
+          <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
+            <Text style={[styles.problemText, { color: feedbackColor }]}> 
+              {problem.display}  vs  {problem.benchmark.toLocaleString()}
+            </Text>
+          </Animated.View>
+          <Text
+            style={[
+              styles.inlineReveal,
+              {
+                color: feedback !== 'none'
+                  ? colors.correct
+                  : peekVisible
+                  ? colors.primary
+                  : 'transparent',
+              },
+            ]}
+          >
+            = {problem.answer}
           </Text>
-        </Animated.View>
-        {feedback === 'wrong' && userAnswer && (
-          <Text style={[styles.hintText, { color: colors.error }]}>✗ {userAnswer}</Text>
-        )}
-        {feedback !== 'none' && (
-          <Text style={[styles.hintText, { color: colors.correct }]}>✓ {problem.answer}</Text>
-        )}
+        </View>
       </View>
 
       {/* < / > buttons */}
@@ -328,8 +364,8 @@ export default function BoundingGameScreen() {
             feedback === 'wrong' && problem.answer === '<' && { borderColor: colors.error },
           ]}
           activeOpacity={0.7}
-          onPress={() => answer('<')}
-          disabled={feedback !== 'none'}
+          onPress={feedback !== 'none' && problem.answer === '<' ? advanceNext : () => answer('<')}
+          disabled={feedback !== 'none' && problem.answer !== '<'}
         >
           <Text
             style={[
@@ -351,8 +387,8 @@ export default function BoundingGameScreen() {
             feedback === 'wrong' && problem.answer === '>' && { borderColor: colors.error },
           ]}
           activeOpacity={0.7}
-          onPress={() => answer('>')}
-          disabled={feedback !== 'none'}
+          onPress={feedback !== 'none' && problem.answer === '>' ? advanceNext : () => answer('>')}
+          disabled={feedback !== 'none' && problem.answer !== '>'}
         >
           <Text
             style={[
@@ -387,16 +423,10 @@ export default function BoundingGameScreen() {
       )}
 
       <View style={styles.footer}>
-        <SwipeHint />
-        {awaitingNext && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StruggleToggle isStruggling={currentStruggling} onToggle={handleToggleStruggle} />
-            <KnownToggle isKnown={currentKnown} onToggle={handleToggleKnown} />
-          </View>
-        )}
+        <PeekHint />
       </View>
+    </SpreadsheetChrome>
     </SafeAreaView>
-    </ReferenceOverlay>
   );
 }
 
@@ -431,8 +461,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
+  problemInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
   problemText: { fontSize: 32, fontWeight: '900', letterSpacing: -1, textAlign: 'center' },
-  hintText: { ...Font.body, marginTop: Spacing.md, textAlign: 'center' },
+  inlineReveal: { ...Font.h2, minWidth: 28, textAlign: 'left' },
 
   btnRow: {
     flexDirection: 'row',

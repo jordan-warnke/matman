@@ -10,6 +10,7 @@ function InnerLayout() {
       contentStyle: { backgroundColor: colors.background },
     }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="reference/index" />
       <Stack.Screen name="times-tables/index" />
       <Stack.Screen name="fdp/index" />
       <Stack.Screen name="arithmetic/index" />

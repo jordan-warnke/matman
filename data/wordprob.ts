@@ -2,7 +2,7 @@
  * Keyword → Algebra Mapping — GMAT drill bank.
  *
  * Quick drills that train vocabulary-to-algebra translation.
- * Each problem is a short English phrase → algebraic expression.
+    display: '"Person A can finish a job in a hours, and Person B can finish the same job in b hours. Working together, their time is:"',
  *
  * Categories:
  *  1. Vocabulary → Algebra  (core keyword mappings)
@@ -613,7 +613,7 @@ const inequalities: WordProblem[] = [
 const rateWorkFormulas: WordProblem[] = [
   {
     id: 'rw01', category: 'Rate & Work Setups',
-    display: '"Machine A finishes a job in a hours. Machine B finishes it in b hours. Both work together."',
+    display: '"A: a hrs \u00b7 B: b hrs \u00b7 Together?"',
     question: 'Set up combined time:',
     answer: '1/a + 1/b = 1/t',
     options: ['1/a + 1/b = 1/t', 'a + b = t', 't = ab', '1/(a + b) = t', 't = (a − b)/2', 'a/b = t'],
@@ -622,7 +622,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw02', category: 'Rate & Work Setups',
-    display: '"Same distance traveled at speed s₁ one way and s₂ returning"',
+    display: '"Same distance: s₁ out, s₂ back"',
     question: 'Average speed for the round trip:',
     answer: '2s₁s₂ / (s₁ + s₂)',
     options: ['2s₁s₂ / (s₁ + s₂)', '(s₁ + s₂) / 2', '√(s₁ × s₂)', 's₁s₂ / (s₁ + s₂)', '(s₁² + s₂²) / (s₁ + s₂)', 's₁ + s₂'],
@@ -631,7 +631,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw03', category: 'Rate & Work Setups',
-    display: '"Car goes d₁ miles at r₁ mph, then d₂ miles at r₂ mph"',
+    display: '"d₁ mi @ r₁ mph, then d₂ mi @ r₂ mph"',
     question: 'Average speed for the whole trip:',
     answer: '(d₁ + d₂) / (d₁/r₁ + d₂/r₂)',
     options: ['(d₁ + d₂) / (d₁/r₁ + d₂/r₂)', '(r₁ + r₂) / 2', '(d₁r₁ + d₂r₂) / (d₁ + d₂)', '(d₁ + d₂) / (r₁ + r₂)', 'r₁r₂ / (r₁ + r₂)', '(d₁r₂ + d₂r₁) / (d₁ + d₂)'],
@@ -640,7 +640,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw04', category: 'Rate & Work Setups',
-    display: '"Train A leaves at speed r₁. T hours later, faster Train B (speed r₂) chases same direction."',
+    display: '"A leaves @ r₁. T hrs later, B (r₂) chases."',
     question: 'Catch-up equation (t = A\'s total time):',
     answer: 'r₁t = r₂(t − T)',
     options: ['r₁t = r₂(t − T)', 'r₁ + r₂ = t/T', 'r₁T = r₂t', 'r₁r₂ = Tt', '(r₂ − r₁)t = T', 'r₁(t + T) = r₂t'],
@@ -649,7 +649,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw05', category: 'Rate & Work Setups',
-    display: '"Two cars leave the same point simultaneously, going opposite directions at r₁ and r₂"',
+    display: '"Same point, opposite directions: r₁ and r₂"',
     question: 'Distance apart after t hours:',
     answer: '(r₁ + r₂)t',
     options: ['(r₁ + r₂)t', '|r₁ − r₂|t', 'r₁r₂t', '(r₁ + r₂)/t', 'r₁t − r₂t', 'r₁t × r₂t'],
@@ -658,7 +658,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw06', category: 'Rate & Work Setups',
-    display: '"n identical machines, each completes a job alone in t hours"',
+    display: '"n machines, each takes t hrs alone"',
     question: 'Time for all n working together:',
     answer: 't / n',
     options: ['t / n', 'nt', 't − n', 'n / t', 't(n − 1)', '1/(nt)'],
@@ -667,7 +667,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw07', category: 'Rate & Work Setups',
-    display: '"A does a job in a hours. With B, they finish in t hours (t < a)."',
+    display: '"A alone: a hrs · A+B together: t hrs"',
     question: 'B\'s time alone:',
     answer: 'at / (a − t)',
     options: ['at / (a − t)', 'a − t', 'a + t', 'at', '(a + t) / 2', 't / (a − t)'],
@@ -676,7 +676,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw08', category: 'Rate & Work Setups',
-    display: '"Pipe A fills a tank in a hours. Pipe B drains it in b hours (b > a). Both run."',
+    display: '"Fill: a hrs · Drain: b hrs (b > a) · Both run"',
     question: 'Net fill rate per hour:',
     answer: '1/a − 1/b',
     options: ['1/a − 1/b', '1/a + 1/b', '1/(a − b)', '1/(a + b)', 'b/a − 1', '(a + b)/ab'],
@@ -685,7 +685,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw09', category: 'Rate & Work Setups',
-    display: '"A car travels d miles at r mph, then returns at s mph."',
+    display: '"d miles out @ r, back @ s"',
     question: 'Average speed for the round trip:',
     answer: '2rs / (r + s)',
     options: ['2rs / (r + s)', '(r + s) / 2', 'rs / (r + s)', '2d / (r + s)', 'r + s', 'd(r + s) / 2'],
@@ -694,7 +694,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw10', category: 'Rate & Work Setups',
-    display: '"A and B work at rates of 1/a and 1/b. A works alone for t hours, then B joins."',
+    display: '"Rates 1/a, 1/b · A works t hrs, then B joins"',
     question: 'Remaining work when B joins:',
     answer: '1 − t/a',
     options: ['1 − t/a', '1 − t/b', 't/a', '1 − t/(a+b)', 't/b', 'a − t'],
@@ -703,7 +703,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw11', category: 'Rate & Work Setups',
-    display: '"Machine A produces x units per hour, Machine B produces y units per hour."',
+    display: '"A: x units/hr · B: y units/hr"',
     question: 'Time to produce n units together:',
     answer: 'n / (x + y)',
     options: ['n / (x + y)', 'n(x + y)', '(x + y) / n', 'nx + ny', 'n / xy', '(nx + ny) / 2'],
@@ -712,7 +712,7 @@ const rateWorkFormulas: WordProblem[] = [
   },
   {
     id: 'rw12', category: 'Rate & Work Setups',
-    display: '"A is 50% faster than B. B takes t hours alone."',
+    display: '"A is 50% faster · B alone: t hrs"',
     question: 'A\'s time alone:',
     answer: '2t/3',
     options: ['2t/3', 't/2', 't − 0.5', '1.5t', '3t/2', 't/1.5'],
@@ -832,9 +832,268 @@ const numberProperties: WordProblem[] = [
     hint: '7¹=7, 7²=49, 7³=343, 7⁴=2401. Units: 7,9,3,1 cycle. 7⁴ ends in 1.',
     historyKey: 'wp:np:units-digit-cycle',
   },
+  {
+    id: 'np13', category: 'Number Properties',
+    display: '"is a number divisible by 3?"',
+    question: 'Test:',
+    answer: 'Sum of digits is divisible by 3',
+    options: ['Sum of digits is divisible by 3', 'Last digit is 3, 6, or 9', 'The number is odd', 'Last two digits divisible by 3', 'Alternating digit sum divisible by 3', 'Product of digits divisible by 3'],
+    hint: 'E.g. 729: 7+2+9 = 18, divisible by 3 ✓. Works for ANY number.',
+    historyKey: 'wp:np:div-by-3',
+  },
+  {
+    id: 'np14', category: 'Number Properties',
+    display: '"is a number divisible by 4?"',
+    question: 'Test:',
+    answer: 'Last two digits form a number divisible by 4',
+    options: ['Last two digits form a number divisible by 4', 'Last digit is 4 or 8', 'Sum of digits divisible by 4', 'Number is even and divisible by 2 twice', 'Last digit is 0, 4, or 8', 'Last three digits divisible by 4'],
+    hint: 'E.g. 1,324: last two digits "24" ÷ 4 = 6 ✓. Only check the last two digits.',
+    historyKey: 'wp:np:div-by-4',
+  },
+  {
+    id: 'np15', category: 'Number Properties',
+    display: '"is a number divisible by 9?"',
+    question: 'Test:',
+    answer: 'Sum of digits is divisible by 9',
+    options: ['Sum of digits is divisible by 9', 'Last digit is 9', 'Last two digits divisible by 9', 'Number ends in 0 or 9', 'Product of digits divisible by 9', 'Alternating digit sum divisible by 9'],
+    hint: 'E.g. 738: 7+3+8 = 18 ÷ 9 = 2 ✓. Same method as divisibility by 3, but must divide by 9.',
+    historyKey: 'wp:np:div-by-9',
+  },
+  {
+    id: 'np16', category: 'Number Properties',
+    display: '"is a number divisible by 8?"',
+    question: 'Test:',
+    answer: 'Last three digits form a number divisible by 8',
+    options: ['Last three digits form a number divisible by 8', 'Last two digits divisible by 8', 'Sum of digits divisible by 8', 'Number is divisible by 2 and 4', 'Last digit is 0 or 8', 'Alternating digits divisible by 8'],
+    hint: 'E.g. 1,160: last three digits "160" ÷ 8 = 20 ✓. Only check the last three digits.',
+    historyKey: 'wp:np:div-by-8',
+  },
 ];
 
 // ── Export all ──────────────────────────────────────────────
+
+// ── 6. Statistics & Counting ───────────────────────────────
+
+const statisticsCounting: WordProblem[] = [
+  {
+    id: 'st01', category: 'Statistics & Counting',
+    display: '"average (arithmetic mean)"',
+    question: 'Formula:',
+    answer: 'Sum of terms / Number of terms',
+    options: ['Sum of terms / Number of terms', 'Sum × Number of terms', 'Largest − Smallest', '(First + Last) × Count', 'Number / Sum', 'Sum − Number'],
+    hint: 'Average = Sum / Count. Rearrange: Sum = Average × Count.',
+    historyKey: 'wp:st:average',
+  },
+  {
+    id: 'st02', category: 'Statistics & Counting',
+    display: '"count integers from a to b inclusive"',
+    question: 'Formula:',
+    answer: 'b − a + 1',
+    options: ['b − a + 1', 'b − a', 'b − a − 1', '(b − a) / 2', 'b + a', 'b × a'],
+    hint: 'Fencepost counting: 5 to 12 inclusive = 12 − 5 + 1 = 8 integers.',
+    historyKey: 'wp:st:count-integers',
+  },
+  {
+    id: 'st03', category: 'Statistics & Counting',
+    display: '"average of evenly spaced set"',
+    question: 'Shortcut:',
+    answer: '(First + Last) / 2',
+    options: ['(First + Last) / 2', 'Sum of all / n', '(First × Last) / 2', 'First + Last', '(Last − First) / 2', 'Middle term squared'],
+    hint: 'In any evenly spaced set: Mean = Median = (First + Last) / 2.',
+    historyKey: 'wp:st:avg-evenly-spaced',
+  },
+  {
+    id: 'st04', category: 'Statistics & Counting',
+    display: '"weighted average of two groups"',
+    question: 'Formula:',
+    answer: '(n₁·avg₁ + n₂·avg₂) / (n₁ + n₂)',
+    options: ['(n₁·avg₁ + n₂·avg₂) / (n₁ + n₂)', '(avg₁ + avg₂) / 2', 'avg₁ × avg₂', '(n₁ + n₂) / (avg₁ + avg₂)', 'n₁·avg₁ + n₂·avg₂', '(avg₁ − avg₂) / 2'],
+    hint: 'Weighted avg leans toward the group with more data. NOT a simple average!',
+    historyKey: 'wp:st:weighted-avg',
+  },
+  {
+    id: 'st05', category: 'Statistics & Counting',
+    display: '"count multiples of k from a to b"',
+    question: 'Formula:',
+    answer: '(Last mult − First mult) / k + 1',
+    options: ['(Last mult − First mult) / k + 1', '(b − a) / k', 'b/k − a/k', '(b − a) + 1', '(b − a) / k + 1', 'b/k × a/k'],
+    hint: 'Multiples of 3 from 6 to 18: (18 − 6)/3 + 1 = 5. Find first and last multiples first!',
+    historyKey: 'wp:st:count-multiples',
+  },
+  {
+    id: 'st06', category: 'Statistics & Counting',
+    display: '"add a constant to every term in a set"',
+    question: 'Effect on standard deviation:',
+    answer: 'No change',
+    options: ['No change', 'SD increases by that constant', 'SD decreases', 'SD doubles', 'SD becomes 0', 'SD multiplied by constant'],
+    hint: 'Shifting all data doesn\'t change spread. SD stays the same. Multiplying DOES change SD.',
+    historyKey: 'wp:st:sd-add-constant',
+  },
+];
+
+// ── 7. Probability & Combinatorics ─────────────────────────
+
+const probabilityCombinatorics: WordProblem[] = [
+  {
+    id: 'pc01', category: 'Probability & Combinatorics',
+    display: '"probability of an event"',
+    question: 'Formula:',
+    answer: 'Favorable outcomes / Total outcomes',
+    options: ['Favorable outcomes / Total outcomes', 'Total / Favorable', 'Favorable × Total', 'Favorable − Total', '1 / Total', 'Favorable + Total'],
+    hint: 'P(event) = favorable / total. Always between 0 and 1.',
+    historyKey: 'wp:pc:basic-prob',
+  },
+  {
+    id: 'pc02', category: 'Probability & Combinatorics',
+    display: '"probability event does NOT occur"',
+    question: 'Formula:',
+    answer: '1 − P(event)',
+    options: ['1 − P(event)', '1 / P(event)', 'P(event)²', '1 + P(event)', 'P(event) − 1', '2 × P(event)'],
+    hint: 'Complement rule: P(not A) = 1 − P(A). Must sum to 1.',
+    historyKey: 'wp:pc:complement',
+  },
+  {
+    id: 'pc03', category: 'Probability & Combinatorics',
+    display: '"P(A and B) — A, B independent"',
+    question: 'Formula:',
+    answer: 'P(A) × P(B)',
+    options: ['P(A) × P(B)', 'P(A) + P(B)', 'P(A) − P(B)', 'P(A) / P(B)', 'P(A) + P(B) − P(A)P(B)', '1 − P(A)P(B)'],
+    hint: 'Independent events: just multiply. P(A and B) = P(A) × P(B).',
+    historyKey: 'wp:pc:independent-and',
+  },
+  {
+    id: 'pc04', category: 'Probability & Combinatorics',
+    display: '"P(A or B)"',
+    question: 'General formula:',
+    answer: 'P(A) + P(B) − P(A and B)',
+    options: ['P(A) + P(B) − P(A and B)', 'P(A) × P(B)', 'P(A) + P(B)', 'P(A) − P(B)', '1 − P(A)P(B)', 'P(A) + P(B) + P(A∩B)'],
+    hint: 'Subtract overlap to avoid double counting. If mutually exclusive: just P(A) + P(B).',
+    historyKey: 'wp:pc:or-rule',
+  },
+  {
+    id: 'pc05', category: 'Probability & Combinatorics',
+    display: '"Choose k items from n distinct items, where order does not matter."',
+    question: 'Formula:',
+    answer: 'nCk = n! / (k!(n−k)!)',
+    options: ['nCk = n! / (k!(n−k)!)', 'nPk = n! / (n−k)!', 'n × k', 'n! / k!', 'n^k', '(n−k)! / n!'],
+    hint: 'Combinations: order doesn\'t matter. "Choose" = C. Divide out the rearrangements.',
+    historyKey: 'wp:pc:combination',
+  },
+  {
+    id: 'pc06', category: 'Probability & Combinatorics',
+    display: '"Arrange k items selected from n distinct items, where order matters."',
+    question: 'Formula:',
+    answer: 'nPk = n! / (n−k)!',
+    options: ['nPk = n! / (n−k)!', 'nCk = n! / (k!(n−k)!)', 'n × k', 'n! / k!', 'k!', 'n^k'],
+    hint: 'Permutations: order DOES matter. nPk = nCk × k! (more than combinations).',
+    historyKey: 'wp:pc:permutation',
+  },
+  {
+    id: 'pc07', category: 'Probability & Combinatorics',
+    display: '"at least one event occurs"',
+    question: 'Shortcut:',
+    answer: '1 − P(none occur)',
+    options: ['1 − P(none occur)', 'P(all occur)', 'P(A) + P(B) + ...', '1 − P(all occur)', 'P(A) × P(B) × ...', 'Sum of all P values'],
+    hint: '"At least 1" → complement of "none." Much easier to calculate P(none) and subtract from 1.',
+    historyKey: 'wp:pc:at-least-one',
+  },
+];
+
+// ── 8. Sequences & Series ──────────────────────────────────
+
+const sequencesSeries: WordProblem[] = [
+  {
+    id: 'sq01', category: 'Sequences & Series',
+    display: '"arithmetic sequence · constant difference d"',
+    question: 'nth term formula:',
+    answer: 'aₙ = a₁ + (n−1)d',
+    options: ['aₙ = a₁ + (n−1)d', 'aₙ = a₁ × d^(n−1)', 'aₙ = a₁ + nd', 'aₙ = a₁ × (n−1)d', 'aₙ = n × a₁ + d', 'aₙ = a₁ − (n−1)d'],
+    hint: 'Start + (n−1) gaps of d. E.g., 5,10,15: a₄ = 5 + 3(5) = 20.',
+    historyKey: 'wp:sq:arith-nth',
+  },
+  {
+    id: 'sq02', category: 'Sequences & Series',
+    display: '"sum of an arithmetic sequence"',
+    question: 'Formula:',
+    answer: 'Sₙ = n/2 × (a₁ + aₙ)',
+    options: ['Sₙ = n/2 × (a₁ + aₙ)', 'Sₙ = n × (a₁ + aₙ)', 'Sₙ = (a₁ + aₙ) / n', 'Sₙ = n × a₁ × d', 'Sₙ = a₁ × n²', 'Sₙ = n(n+1)/2 always'],
+    hint: 'Sum = count × average. Average of arithmetic seq = (first + last) / 2.',
+    historyKey: 'wp:sq:arith-sum',
+  },
+  {
+    id: 'sq03', category: 'Sequences & Series',
+    display: '"geometric sequence · constant ratio r"',
+    question: 'nth term formula:',
+    answer: 'aₙ = a₁ × r^(n−1)',
+    options: ['aₙ = a₁ × r^(n−1)', 'aₙ = a₁ + (n−1)r', 'aₙ = a₁ × n × r', 'aₙ = a₁ × r^n', 'aₙ = r^n / a₁', 'aₙ = a₁ + r^(n−1)'],
+    hint: 'Geometric: multiply by r each time. E.g., 2,6,18: a₄ = 2 × 3³ = 54.',
+    historyKey: 'wp:sq:geom-nth',
+  },
+  {
+    id: 'sq04', category: 'Sequences & Series',
+    display: '"arrange k people in a circle"',
+    question: 'Number of arrangements:',
+    answer: '(k−1)!',
+    options: ['(k−1)!', 'k!', 'k²', '2k!', 'k!/2', 'k^(k−1)'],
+    hint: 'Circular: fix one person, arrange the rest → (k−1)! arrangements.',
+    historyKey: 'wp:sq:circular',
+  },
+];
+
+// ── 10. Interest & Profit ──────────────────────────────────
+
+const interestProfit: WordProblem[] = [
+  {
+    id: 'ip01', category: 'Interest & Profit',
+    display: '"simple interest"',
+    question: 'Formula:',
+    answer: 'I = P × r × t',
+    options: ['I = P × r × t', 'I = P(1 + r)^t', 'I = P × r / t', 'I = P + rt', 'I = Prt²', 'I = P / (r × t)'],
+    hint: 'Simple: Interest = Principal × Rate × Time. Linear growth.',
+    historyKey: 'wp:ip:simple-interest',
+  },
+  {
+    id: 'ip02', category: 'Interest & Profit',
+    display: '"compound interest (n times/year)"',
+    question: 'Future value formula:',
+    answer: 'A = P(1 + r/n)^(nt)',
+    options: ['A = P(1 + r/n)^(nt)', 'A = P × r × t', 'A = P(1 + rt)', 'A = P × n^(rt)', 'A = P(1 + r)^n', 'A = P + Prt'],
+    hint: 'Compound grows exponentially. More frequent compounding → faster growth.',
+    historyKey: 'wp:ip:compound-interest',
+  },
+  {
+    id: 'ip03', category: 'Interest & Profit',
+    display: '"profit equation"',
+    question: 'Formula:',
+    answer: 'Profit = Revenue − Cost',
+    options: ['Profit = Revenue − Cost', 'Profit = Revenue + Cost', 'Profit = Revenue × Cost', 'Profit = Revenue / Cost', 'Profit = Cost − Revenue', 'Profit = (Rev + Cost) / 2'],
+    hint: 'Profit = what you earn − what you spend. Negative = loss.',
+    historyKey: 'wp:ip:profit',
+  },
+];
+
+// ── 11. Overlapping Sets ───────────────────────────────────
+
+const overlappingSets: WordProblem[] = [
+  {
+    id: 'os01', category: 'Overlapping Sets',
+    display: '"total in group A or B (two-set Venn)"',
+    question: 'Formula:',
+    answer: '|A∪B| = |A| + |B| − |A∩B|',
+    options: ['|A∪B| = |A| + |B| − |A∩B|', '|A∪B| = |A| + |B|', '|A∪B| = |A| × |B|', '|A∪B| = |A| + |B| + |A∩B|', '|A∪B| = |A| − |B| + |A∩B|', '|A∪B| = |A∩B| − |A| − |B|'],
+    hint: 'Subtract overlap to avoid double counting. Key Venn diagram formula.',
+    historyKey: 'wp:os:two-set',
+  },
+  {
+    id: 'os02', category: 'Overlapping Sets',
+    display: '"total unique members (three-set Venn)"',
+    question: 'Formula:',
+    answer: 'A + B + C − (exactly 2) − 2(all 3) + Neither',
+    options: ['A + B + C − (exactly 2) − 2(all 3) + Neither', 'A + B + C', 'A + B + C − (all 3)', 'A × B × C + Neither', 'A + B + C − (exactly 2) + (all 3)', 'A + B + C + (exactly 2) − (all 3)'],
+    hint: 'Three-set Venn: add groups, subtract pairs, correct for triple overlap, add neither.',
+    historyKey: 'wp:os:three-set',
+  },
+];
 
 export const ALL_WORD_PROBLEMS: WordProblem[] = [
   ...vocabulary,
@@ -842,4 +1101,9 @@ export const ALL_WORD_PROBLEMS: WordProblem[] = [
   ...inequalities,
   ...rateWorkFormulas,
   ...numberProperties,
+  ...statisticsCounting,
+  ...probabilityCombinatorics,
+  ...sequencesSeries,
+  ...interestProfit,
+  ...overlappingSets,
 ];

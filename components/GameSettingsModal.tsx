@@ -17,6 +17,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import {
     GameType,
     ModeSettings,
+  sanitizeModeSettings,
     saveModeSettings,
 } from '../store/HistoryStore';
 
@@ -28,6 +29,7 @@ export interface SettingsFields {
   problemCount?: boolean;
   questionStyle?: boolean;
   operationType?: boolean;
+  excludedNumbers?: boolean;
 }
 
 interface Props {
@@ -60,7 +62,7 @@ export default function GameSettingsModal({
         problemCount: settings.problemCount ? String(settings.problemCount) : '',
       });
     }
-  }, [visible]);
+  }, [visible, settings]);
 
   function clamp(raw: string, min: number, max: number): number {
     const n = parseInt(raw, 10);
@@ -70,9 +72,9 @@ export default function GameSettingsModal({
   }
 
   async function patch(update: Partial<ModeSettings>) {
-    const next = { ...settings, ...update };
+    const next = sanitizeModeSettings({ ...settings, ...update });
     onSettingsChange(next);
-    await saveModeSettings(gameType, update);
+    await saveModeSettings(gameType, next);
   }
 
   const maxRange = fields.maxNumber ?? { min: 1, max: 13 };
@@ -267,6 +269,73 @@ export default function GameSettingsModal({
                   );
                 })()}
 
+                {fields.excludedNumbers && (settings.operationType ?? 'multiply') === 'multiply' && (
+                  <View style={styles.row}>
+                    <Text style={[styles.label, { color: colors.text }]}>Exclude perfect-square pairs</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.inlineToggle,
+                        { backgroundColor: settings.excludeSquarePairs ? colors.primary : colors.border },
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => patch({ excludeSquarePairs: !settings.excludeSquarePairs })}
+                    >
+                      <Text style={[styles.inlineToggleText, { color: settings.excludeSquarePairs ? '#FFF' : colors.text }]}> 
+                        {settings.excludeSquarePairs ? 'On' : 'Off'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {fields.excludedNumbers && (() => {
+                  const range = fields.maxNumber ?? { min: 1, max: 13 };
+                  const nums = Array.from({ length: range.max - range.min + 1 }, (_, i) => i + range.min);
+                  const activeSet = new Set(
+                    nums.filter((n) => !(settings.excludedNumbers ?? []).includes(n)),
+                  );
+                  return (
+                    <View style={{ gap: Spacing.xs }}>
+                      <Text style={[styles.label, { color: colors.text }]}>Numbers in play</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>
+                        Known items stay suppressed. At least one number in the active range remains available.
+                      </Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {nums.map((n) => {
+                          const excluded = (settings.excludedNumbers ?? []).includes(n);
+                          const anchorLocked = settings.anchor === n;
+                          const isLastActive = !excluded && activeSet.size <= 1;
+                          const disabled = anchorLocked || isLastActive;
+                          return (
+                            <TouchableOpacity
+                              key={n}
+                              style={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: 10,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                backgroundColor: excluded ? colors.border : colors.primary,
+                                opacity: disabled ? 0.55 : excluded ? 0.4 : 1,
+                              }}
+                              activeOpacity={0.7}
+                              disabled={disabled}
+                              onPress={() => {
+                                const current = settings.excludedNumbers ?? [];
+                                const next = excluded
+                                  ? current.filter((x) => x !== n)
+                                  : [...current, n];
+                                patch({ excludedNumbers: next });
+                              }}
+                            >
+                              <Text style={{ fontSize: 15, fontWeight: '700', color: excluded ? colors.text : '#FFF' }}>{n}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })()}
+
               </ScrollView>
 
               <TouchableOpacity
@@ -294,6 +363,7 @@ const styles = StyleSheet.create({
   },
   modal: {
     width: '100%',
+    maxHeight: '85%',
     borderRadius: 20,
     padding: Spacing.lg,
     gap: Spacing.md,
@@ -302,6 +372,15 @@ const styles = StyleSheet.create({
     ...Font.h3,
     marginBottom: Spacing.xs,
   },
+  inlineToggle: {
+    minWidth: 52,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inlineToggleText: { fontSize: 12, fontWeight: '700' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

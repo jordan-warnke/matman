@@ -7,9 +7,17 @@ const COLS = 13;
 const { width: SCREEN_W } = Dimensions.get('window');
 const CELL = Math.floor((SCREEN_W - 32) / (COLS + 1));
 
-export default function MultiplicationTable() {
+interface MultiplicationTableProps {
+  minNumber?: number;
+  maxNumber?: number;
+  excludedNumbers?: number[];
+}
+
+export default function MultiplicationTable({ minNumber = 1, maxNumber = 13, excludedNumbers = [] }: MultiplicationTableProps) {
   const { colors } = useTheme();
   const nums = Array.from({ length: COLS }, (_, i) => i + 1);
+  const excluded = new Set(excludedNumbers);
+  const isActive = (n: number) => n >= minNumber && n <= maxNumber && !excluded.has(n);
 
   return (
     <View style={[styles.wrapper, { backgroundColor: colors.card }]}>
@@ -24,7 +32,7 @@ export default function MultiplicationTable() {
             <Text style={styles.cornerText}>×</Text>
           </View>
           {nums.map((n) => (
-            <View key={`h${n}`} style={[styles.cell, { backgroundColor: colors.border }]}>
+            <View key={`h${n}`} style={[styles.cell, { backgroundColor: colors.border, opacity: isActive(n) ? 1 : 0.3 }]}>
               <Text style={[styles.headerText, { color: colors.text }]}>{n}</Text>
             </View>
           ))}
@@ -33,14 +41,17 @@ export default function MultiplicationTable() {
         {/* Data rows */}
         {nums.map((row) => (
           <View key={`r${row}`} style={styles.row}>
-            <View style={[styles.cell, { backgroundColor: colors.border }]}>
+            <View style={[styles.cell, { backgroundColor: colors.border, opacity: isActive(row) ? 1 : 0.3 }]}>
               <Text style={[styles.headerText, { color: colors.text }]}>{row}</Text>
             </View>
-            {nums.map((col) => (
-              <View key={`${row}-${col}`} style={[styles.cell, { borderColor: colors.border }]}>
-                <Text style={[styles.cellText, { color: colors.text }]}>{row * col}</Text>
-              </View>
-            ))}
+            {nums.map((col) => {
+              const cellActive = isActive(row) && isActive(col);
+              return (
+                <View key={`${row}-${col}`} style={[styles.cell, { borderColor: colors.border }]}>
+                  <Text style={[styles.cellText, { color: colors.text, opacity: cellActive ? 1 : 0.2 }]}>{row * col}</Text>
+                </View>
+              );
+            })}
           </View>
         ))}
       </View>

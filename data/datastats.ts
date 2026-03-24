@@ -124,7 +124,7 @@ const overlapFormulas: DataStatsProblem[] = [
 const countingFormulas: DataStatsProblem[] = [
   {
     id: 'ct01', category: 'Counting & Probability',
-    display: '"choose r items from n (order doesn\'t matter)"',
+    display: '"Choose r items from n distinct items, where order does not matter."',
     question: 'Formula:',
     answer: 'n! / (r!(n − r)!)',
     options: ['n! / (r!(n − r)!)', 'n! / (n − r)!', 'n! / r!', 'nʳ', 'n² / r!', '(n − r)! / n!'],
@@ -196,7 +196,7 @@ const countingFormulas: DataStatsProblem[] = [
   },
   {
     id: 'ct09', category: 'Counting & Probability',
-    display: '"choose r items from n where order matters"',
+    display: '"Choose r items from n distinct items, where order matters."',
     question: 'Formula:',
     answer: 'n! / (n − r)!',
     options: ['n! / (n − r)!', 'n! / (r!(n−r)!)', 'n!', 'nʳ', 'r! / n!', 'C(n,r) × r!'],

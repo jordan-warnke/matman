@@ -5,7 +5,11 @@ import { loadGlobalSettings, saveGlobalSettings } from '../store/HistoryStore';
 interface ThemeContextType {
   colors: ThemeColors;
   isDark: boolean;
-  toggleTheme: () => void;
+  isWork: boolean;
+  isWorkDark: boolean;
+  themeMode: 'light' | 'dark' | 'work';
+  setThemeMode: (mode: 'light' | 'dark' | 'work') => void;
+  toggleWorkDark: () => void;
   timed: boolean;
   setTimed: (v: boolean) => void;
   multipleChoice: boolean;
@@ -15,7 +19,11 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType>({
   colors: Colors.light,
   isDark: false,
-  toggleTheme: () => {},
+  isWork: false,
+  isWorkDark: false,
+  themeMode: 'light',
+  setThemeMode: () => {},
+  toggleWorkDark: () => {},
   timed: false,
   setTimed: () => {},
   multipleChoice: false,
@@ -23,22 +31,22 @@ const ThemeContext = createContext<ThemeContextType>({
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [isDark, setIsDark] = useState(false);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'work'>('light');
+  const [workDark, setWorkDark] = useState(false);
   const [timed, setTimedState] = useState(false);
   const [multipleChoice, setMCState] = useState(false);
 
   useEffect(() => {
     loadGlobalSettings().then((s) => {
-      setIsDark(s.theme === 'dark');
+      setThemeMode(s.theme === 'dark' ? 'dark' : s.theme === 'work' ? 'work' : 'light');
       setTimedState(!!s.timed);
       setMCState(!!s.multipleChoice);
     });
   }, []);
 
-  async function toggleTheme() {
-    const next = !isDark;
-    setIsDark(next);
-    await saveGlobalSettings({ theme: next ? 'dark' : 'light' });
+  async function setThemeModeAndSave(mode: 'light' | 'dark' | 'work') {
+    setThemeMode(mode);
+    await saveGlobalSettings({ theme: mode });
   }
 
   async function setTimed(v: boolean) {
@@ -51,10 +59,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     await saveGlobalSettings({ multipleChoice: v });
   }
 
-  const colors = isDark ? Colors.dark : Colors.light;
+  const colors = themeMode === 'dark' ? Colors.dark : themeMode === 'work' ? (workDark ? Colors.workDark : Colors.work) : Colors.light;
+  const isDark = themeMode === 'dark' || (themeMode === 'work' && workDark);
+  const isWork = themeMode === 'work';
+  const isWorkDark = themeMode === 'work' && workDark;
+
+  function toggleWorkDark() {
+    setWorkDark((v) => !v);
+  }
 
   return (
-    <ThemeContext.Provider value={{ colors, isDark, toggleTheme, timed, setTimed, multipleChoice, setMultipleChoice }}>
+    <ThemeContext.Provider value={{ colors, isDark, isWork, isWorkDark, themeMode, setThemeMode: setThemeModeAndSave, toggleWorkDark, timed, setTimed, multipleChoice, setMultipleChoice }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -42,8 +42,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "673d5ac0-43ed-402d-b348-3d906e2a3fb5"
+        "projectId": "da100d39-5036-4cbe-a247-e80f2cdc4904"
       }
-    }
+    },
+    "owner": "jdubleu"
   }
 }

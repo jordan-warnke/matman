@@ -9,11 +9,12 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KnownToggle from '../../components/KnownToggle';
-import ReferenceOverlay, { SwipeHint } from '../../components/ReferenceOverlay';
-import StruggleToggle from '../../components/StruggleToggle';
+import PeekHint from '../../components/PeekHint';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import { formatFactorization, isPrime, TRAP_NUMBERS } from '../../data/primes';
 import {
     ankiWeight,
@@ -21,13 +22,9 @@ import {
     GameType,
     History,
     loadHistory,
-    loadKnown,
     loadModeSettings,
-    loadStruggles,
     ModeSettings,
     recordByKey,
-    toggleKnown,
-    toggleStruggle,
 } from '../../store/HistoryStore';
 
 
@@ -41,14 +38,14 @@ interface PrimeProblem {
   isTrap: boolean;
 }
 
-function buildPool(history: History, maxN: number, struggles: Set<string>, known: Set<string>) {
+function buildPool(history: History, maxN: number) {
   const primes: { n: number; weight: number }[] = [];
   const composites: { n: number; weight: number }[] = [];
 
   for (let n = 2; n <= maxN; n++) {
     const key = `prime:${n}`;
     const isTrap = TRAP_NUMBERS.includes(n);
-    let w = ankiWeight(history[key], struggles.has(key), known.has(key));
+    let w = ankiWeight(history[key]);
     if (isTrap) w *= 2; // trap numbers always get a boost
 
     if (isPrime(n)) {
@@ -66,7 +63,7 @@ function buildPool(history: History, maxN: number, struggles: Set<string>, known
 
 export default function PrimesGameScreen() {
   const router = useRouter();
-  const { colors, timed } = useTheme();
+  const { colors, timed, isWork } = useTheme();
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType = (type || 'primes-time-attack') as GameType;
 
@@ -75,15 +72,11 @@ export default function PrimesGameScreen() {
 
   const historyRef = useRef<History>({});
   const maxN = useRef(200);
-  const strugglesRef = useRef<Set<string>>(new Set());
-  const knownRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory(), loadStruggles(), loadKnown()]).then(([s, h, str, kn]) => {
+    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
       setSettings(s);
       historyRef.current = h;
-      strugglesRef.current = str;
-      knownRef.current = kn;
       maxN.current = s.maxNumber > 13 ? s.maxNumber : 200;
       setReady(true);
     });
@@ -98,9 +91,8 @@ export default function PrimesGameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [showDetail, setShowDetail] = useState('');
-  const [currentStruggling, setCurrentStruggling] = useState(false);
-  const [currentKnown, setCurrentKnown] = useState(false);
   const [userAnswer, setUserAnswer] = useState<boolean | null>(null);
+  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
@@ -108,9 +100,11 @@ export default function PrimesGameScreen() {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const submittedRef = useRef(false);
+  const graceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceReadyRef = useRef(0);
 
   const generate = useCallback((): PrimeProblem => {
-    const pool = buildPool(historyRef.current, maxN.current, strugglesRef.current, knownRef.current);
+    const pool = buildPool(historyRef.current, maxN.current);
     const totalWeight = pool.reduce((s, p) => s + p.weight, 0);
     let rand = Math.random() * totalWeight;
     let chosen = pool[0];
@@ -139,6 +133,7 @@ export default function PrimesGameScreen() {
 
   const startProblemTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
     pausedRef.current = false;
     submittedRef.current = false;
     const deadline = Date.now() + settings.timeAttackSeconds * 1000;
@@ -149,14 +144,17 @@ export default function PrimesGameScreen() {
       if (remaining <= 0) {
         clearInterval(timerRef.current!);
         timerRef.current = null;
-        if (submittedRef.current) return;
-        submittedRef.current = true;
-        pausedRef.current = true;
         setTimer(0);
-        setFeedback('wrong');
-        setStreak(0);
-        setAnswered((c) => c + 1);
-        setAwaitingNext(true);
+        graceTimeoutRef.current = setTimeout(() => {
+          if (submittedRef.current) return;
+          submittedRef.current = true;
+          pausedRef.current = true;
+          setFeedback('wrong');
+          setStreak(0);
+          setAnswered((c) => c + 1);
+          setAwaitingNext(true);
+          advanceReadyRef.current = Date.now() + 500;
+        }, 200);
       } else {
         setTimer(remaining);
       }
@@ -168,13 +166,14 @@ export default function PrimesGameScreen() {
     const p = generate();
     setProblem(p);
     problemStartRef.current = Date.now();
-    setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-    setCurrentKnown(knownRef.current.has(p.historyKey));
 
     if (timed) {
       startProblemTimer();
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (graceTimeoutRef.current) clearTimeout(graceTimeoutRef.current);
+    };
   }, [ready]);
 
   const triggerShake = useCallback(() => {
@@ -197,8 +196,11 @@ export default function PrimesGameScreen() {
       // Stop timer immediately
       pausedRef.current = true;
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
+      hidePeek();
 
-      await recordByKey(problem.historyKey, isCorrect, elapsed);
+      const recordedCorrect = isCorrect && !peekUsed;
+      await recordByKey(problem.historyKey, recordedCorrect, elapsed);
       historyRef.current = await loadHistory();
       setAnswered((c) => c + 1);
 
@@ -206,8 +208,8 @@ export default function PrimesGameScreen() {
 
       if (isCorrect) {
         setFeedback('correct');
-        setStreak((s) => s + 1);
-        setCorrectCount((c) => c + 1);
+        if (peekUsed) { setStreak(0); } else { setStreak((s) => s + 1); }
+        if (!peekUsed) setCorrectCount((c) => c + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (!problem.prime) setShowDetail(problem.factorization);
         else setShowDetail(`${problem.n} is prime`);
@@ -219,12 +221,14 @@ export default function PrimesGameScreen() {
         setShowDetail(problem.factorization);
       }
 
+      advanceReadyRef.current = Date.now() + 500;
       setAwaitingNext(true);
     },
-    [problem, feedback, gameOver, generate, triggerShake, popIn, answered, settings.problemCount, timed, startProblemTimer],
+    [problem, feedback, gameOver, generate, triggerShake, popIn, answered, settings.problemCount, timed, startProblemTimer, hidePeek, peekUsed],
   );
 
   const advanceNext = useCallback(() => {
+    if (Date.now() < advanceReadyRef.current) return;
     if (settings.problemCount > 0 && answered >= settings.problemCount) {
       setGameOver(true);
       return;
@@ -236,43 +240,50 @@ export default function PrimesGameScreen() {
     setShowDetail('');
     setAwaitingNext(false);
     setUserAnswer(null);
-    setCurrentStruggling(strugglesRef.current.has(next.historyKey));
-    setCurrentKnown(knownRef.current.has(next.historyKey));
+    resetPeek();
     submittedRef.current = false;
     popIn();
     if (timed) startProblemTimer();
-  }, [generate, answered, settings.problemCount, timed, startProblemTimer, popIn]);
-
-  const handleToggleStruggle = useCallback(async () => {
-    if (!problem) return;
-    const nowStruggling = await toggleStruggle(problem.historyKey);
-    setCurrentStruggling(nowStruggling);
-    strugglesRef.current = await loadStruggles();
-    if (nowStruggling) { knownRef.current = await loadKnown(); setCurrentKnown(false); }
-  }, [problem]);
-
-  const handleToggleKnown = useCallback(async () => {
-    if (!problem) return;
-    const nowKnown = await toggleKnown(problem.historyKey);
-    setCurrentKnown(nowKnown);
-    knownRef.current = await loadKnown();
-    if (nowKnown) { strugglesRef.current = await loadStruggles(); setCurrentStruggling(false); }
-  }, [problem]);
+  }, [generate, answered, settings.problemCount, timed, startProblemTimer, popIn, resetPeek]);
 
   const repeatQuestion = useCallback(() => {
     setFeedback('none');
     setAwaitingNext(false);
     setShowDetail('');
     setUserAnswer(null);
+    resetPeek();
     submittedRef.current = false;
     problemStartRef.current = Date.now();
     if (timed) startProblemTimer();
-  }, [timed, startProblemTimer]);
+  }, [timed, startProblemTimer, resetPeek]);
 
   const feedbackColor =
     feedback === 'correct' ? colors.correct
       : feedback === 'wrong' ? colors.error
         : colors.text;
+
+  const workFormula = problem
+    ? String(problem.n)
+    : '';
+
+  useWebShortcuts(
+    problem
+      ? [
+          feedback !== 'none' && problem.prime ? advanceNext
+          : feedback !== 'none' ? null
+          : () => answer(true),
+          feedback !== 'none' && !problem.prime ? advanceNext
+          : feedback !== 'none' ? null
+          : () => answer(false),
+        ]
+      : [],
+    awaitingNext ? advanceNext : undefined,
+    undefined,
+    undefined,
+    undefined,
+    !awaitingNext && feedback === 'none' ? showPeek : undefined,
+    peekVisible ? hidePeek : undefined,
+  );
 
   if (!ready || !problem) {
     return (
@@ -294,12 +305,11 @@ export default function PrimesGameScreen() {
       setFeedback('none');
       setShowDetail('');
       setAwaitingNext(false);
+      resetPeek();
       submittedRef.current = false;
       const p = generate();
       setProblem(p);
       problemStartRef.current = Date.now();
-      setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-      setCurrentKnown(knownRef.current.has(p.historyKey));
       if (timed) startProblemTimer();
     };
     return (
@@ -329,8 +339,24 @@ export default function PrimesGameScreen() {
   }
 
   return (
-    <ReferenceOverlay>
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
+    <SpreadsheetChrome
+      formula={workFormula}
+      cellRef="D5"
+      options={[
+        { label: 'TRUE', onPress: () => answer(true) },
+        { label: 'FALSE', onPress: () => answer(false) },
+      ]}
+      feedbackState={feedback === 'none' ? null : feedback}
+      correctAnswer={problem.prime ? 'Prime' : 'Composite'}
+      peekValue={problem.prime ? 'Prime' : 'Composite'}
+      peekVisible={peekVisible && feedback === 'none'}
+      selectedValue={userAnswer !== null ? (userAnswer ? 'TRUE' : 'FALSE') : undefined}
+      onBack={() => router.back()}
+      onNext={awaitingNext ? advanceNext : undefined}
+      onRepeat={awaitingNext ? repeatQuestion : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -351,21 +377,31 @@ export default function PrimesGameScreen() {
 
       {/* Number display */}
       <View style={styles.problemArea}>
-        <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
-          <Text style={[styles.numberText, { color: feedbackColor }]}>
-            {problem.n}
+        <View style={styles.problemInlineRow}>
+          <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
+            <Text style={[styles.numberText, { color: feedbackColor }]}> 
+              {problem.n}
+            </Text>
+          </Animated.View>
+          <Text
+            style={[
+              styles.inlineReveal,
+              {
+                color: feedback !== 'none'
+                  ? colors.correct
+                  : peekVisible
+                  ? colors.primary
+                  : 'transparent',
+              },
+            ]}
+          >
+            = {problem.prime ? 'Prime' : 'Composite'}
           </Text>
-        </Animated.View>
+        </View>
         {problem.isTrap && feedback === 'none' && (
           <View style={[styles.trapBadge, { backgroundColor: colors.accent }]}>
             <Text style={styles.trapText}>⚠ TRAP</Text>
           </View>
-        )}
-        {feedback === 'wrong' && userAnswer !== null && (
-          <Text style={[styles.detailText, { color: colors.error }]}>✗ {userAnswer ? 'Prime' : 'Composite'}</Text>
-        )}
-        {feedback !== 'none' && (
-          <Text style={[styles.detailText, { color: colors.correct }]}>✓ {problem.prime ? 'Prime' : 'Composite'}</Text>
         )}
       </View>
 
@@ -379,8 +415,8 @@ export default function PrimesGameScreen() {
             feedback === 'wrong' && !problem.prime && { borderColor: colors.error },
           ]}
           activeOpacity={0.7}
-          onPress={() => answer(true)}
-          disabled={feedback !== 'none'}
+          onPress={feedback !== 'none' && problem.prime ? advanceNext : () => answer(true)}
+          disabled={feedback !== 'none' && !problem.prime}
         >
           <Text
             style={[
@@ -401,8 +437,8 @@ export default function PrimesGameScreen() {
             feedback === 'wrong' && problem.prime && { borderColor: colors.muted },
           ]}
           activeOpacity={0.7}
-          onPress={() => answer(false)}
-          disabled={feedback !== 'none'}
+          onPress={feedback !== 'none' && !problem.prime ? advanceNext : () => answer(false)}
+          disabled={feedback !== 'none' && problem.prime}
         >
           <Text
             style={[
@@ -436,16 +472,10 @@ export default function PrimesGameScreen() {
       )}
 
       <View style={styles.footer}>
-        <SwipeHint />
-        {awaitingNext && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StruggleToggle isStruggling={currentStruggling} onToggle={handleToggleStruggle} />
-            <KnownToggle isKnown={currentKnown} onToggle={handleToggleKnown} />
-          </View>
-        )}
+        <PeekHint />
       </View>
+    </SpreadsheetChrome>
     </SafeAreaView>
-    </ReferenceOverlay>
   );
 }
 
@@ -479,6 +509,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  problemInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
   numberText: { fontSize: 72, fontWeight: '900', letterSpacing: -2 },
   trapBadge: {
     marginTop: Spacing.sm,
@@ -487,7 +523,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   trapText: { fontSize: 12, fontWeight: '800', color: '#FFF', letterSpacing: 1.5 },
-  detailText: { ...Font.body, fontWeight: '600', marginTop: Spacing.md },
+  inlineReveal: { ...Font.h2, minWidth: 88, textAlign: 'left' },
 
   btnRow: {
     flexDirection: 'row',

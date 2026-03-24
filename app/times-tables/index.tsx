@@ -11,6 +11,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -25,7 +26,7 @@ const GAME_TYPE: GameType = 'time-attack';
 
 export default function TimesTablesHub() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isWork } = useTheme();
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
@@ -77,11 +78,12 @@ export default function TimesTablesHub() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SpreadsheetChrome>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={[styles.back, { color: colors.primary }]}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>Times Tables</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Revenue Forecast' : 'Times Tables'}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -113,8 +115,9 @@ export default function TimesTablesHub() {
       {/* ── Settings modal ───────── */}
       <Modal visible={showSettings} animationType="fade" transparent>
         <View style={styles.overlay}>
-          <View style={[styles.modal, { backgroundColor: colors.card }]}>
+          <View style={[styles.modal, { backgroundColor: colors.card, maxHeight: '85%' }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Settings</Text>
+            <ScrollView showsVerticalScrollIndicator={true} style={{ flexShrink: 1 }}>
 
             <View style={styles.modalRow}>
               <Text style={[styles.modalLabel, { color: colors.text }]}>Max number (1–13)</Text>
@@ -251,6 +254,41 @@ export default function TimesTablesHub() {
               );
             })()}
 
+            {/* ── Exclude numbers ─────────── */}
+            <View style={{ marginBottom: Spacing.lg, gap: Spacing.xs }}>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Numbers in play</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {Array.from({ length: 13 }, (_, i) => i + 1).map((n) => {
+                  const excluded = (settings.excludedNumbers ?? []).includes(n);
+                  return (
+                    <TouchableOpacity
+                      key={n}
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 10,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        backgroundColor: excluded ? colors.border : colors.primary,
+                        opacity: excluded ? 0.4 : 1,
+                      }}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        const current = settings.excludedNumbers ?? [];
+                        const next = excluded
+                          ? current.filter((x) => x !== n)
+                          : [...current, n];
+                        patch({ excludedNumbers: next });
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: excluded ? colors.text : '#FFF' }}>{n}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            </ScrollView>
             <TouchableOpacity
               style={[styles.doneBtn, { backgroundColor: colors.primary, borderBottomColor: colors.primaryDark }]}
               activeOpacity={0.85}
@@ -261,6 +299,7 @@ export default function TimesTablesHub() {
           </View>
         </View>
       </Modal>
+    </SpreadsheetChrome>
     </SafeAreaView>
   );
 }

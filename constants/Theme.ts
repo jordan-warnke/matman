@@ -35,9 +35,45 @@ export const Colors = {
     card: '#1B2C33',
     muted: '#778D96',
   },
+  work: {
+    text: '#333333',
+    background: '#FFFFFF',
+    primary: '#4472C4',      // Excel blue
+    primaryDark: '#2F5597',
+    secondary: '#4472C4',
+    secondaryDark: '#2F5597',
+    accent: '#4472C4',
+    accentDark: '#2F5597',
+    error: '#C00000',        // Muted red (spreadsheet error)
+    errorDark: '#A00000',
+    purple: '#4472C4',
+    purpleDark: '#2F5597',
+    correct: '#548235',      // Excel green
+    border: '#D6D6D6',
+    card: '#F2F2F2',
+    muted: '#A6A6A6',
+  },
+  workDark: {
+    text: '#D4D4D4',
+    background: '#1E1E1E',
+    primary: '#569CD6',      // VS Code blue
+    primaryDark: '#4080B0',
+    secondary: '#569CD6',
+    secondaryDark: '#4080B0',
+    accent: '#569CD6',
+    accentDark: '#4080B0',
+    error: '#F44747',
+    errorDark: '#D03030',
+    purple: '#569CD6',
+    purpleDark: '#4080B0',
+    correct: '#6A9955',      // VS Code green
+    border: '#3C3C3C',
+    card: '#252526',
+    muted: '#808080',
+  },
 } as const;
 
-export type ThemeColors = typeof Colors.light;
+export type ThemeColors = (typeof Colors)['light' | 'dark' | 'work' | 'workDark'];
 
 export const Spacing = {
   xs: 4,

@@ -10,20 +10,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Font, Spacing } from '../../constants/Theme';
-import { clearKnown, clearStruggles, DEFAULT_GLOBAL, GlobalSettings, loadGlobalSettings, loadKnown, loadStruggles, resetAllProgress, saveGlobalSettings } from '../../store/HistoryStore';
+import { DEFAULT_GLOBAL, GlobalSettings, loadGlobalSettings, resetAllProgress, saveGlobalSettings } from '../../store/HistoryStore';
 
 const THEME_ORDER: GlobalSettings['theme'][] = ['system', 'light', 'dark'];
 
 export default function SettingsScreen() {
   const router = useRouter();
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_GLOBAL);
-  const [struggleCount, setStruggleCount] = useState(0);
-  const [knownCount, setKnownCount] = useState(0);
 
   useEffect(() => {
     loadGlobalSettings().then(setSettings);
-    loadStruggles().then((s) => setStruggleCount(s.size));
-    loadKnown().then((k) => setKnownCount(k.size));
   }, []);
 
   async function patch(update: Partial<GlobalSettings>) {
@@ -63,53 +59,12 @@ export default function SettingsScreen() {
 
         <Text style={styles.section}>Data</Text>
 
-        <TouchableOpacity
-          style={styles.row}
-          activeOpacity={0.7}
-          onPress={() => {
-            if (struggleCount === 0) return;
-            Alert.alert(
-              'Clear Struggled Items',
-              `Remove all ${struggleCount} struggled item${struggleCount === 1 ? '' : 's'}?`,
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Clear', style: 'destructive', onPress: async () => { await clearStruggles(); setStruggleCount(0); } },
-              ],
-            );
-          }}
-        >
+        <View style={styles.row}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Struggled Items ⚑</Text>
-            <Text style={styles.hint}>Problems flagged for extra practice</Text>
+            <Text style={styles.label}>Adaptive Review</Text>
+            <Text style={styles.hint}>Resurfacing is now automatic. Review timing comes from recent accuracy and speed, not manual flags.</Text>
           </View>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{struggleCount}</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.row}
-          activeOpacity={0.7}
-          onPress={() => {
-            if (knownCount === 0) return;
-            Alert.alert(
-              'Clear Known Items',
-              `Remove all ${knownCount} known item${knownCount === 1 ? '' : 's'}?`,
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Clear', style: 'destructive', onPress: async () => { await clearKnown(); setKnownCount(0); } },
-              ],
-            );
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Known Items 👍</Text>
-            <Text style={styles.hint}>Problems marked as mastered</Text>
-          </View>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{knownCount}</Text>
-          </View>
-        </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.row}
@@ -117,7 +72,7 @@ export default function SettingsScreen() {
           onPress={() =>
             Alert.alert(
               'Reset All Progress',
-              'This will clear all drill history, struggle flags, and mode settings. Your theme preference will be kept.\n\nThis cannot be undone.',
+              'This will clear all drill history and mode settings. Your theme preference will be kept.\n\nThis cannot be undone.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -131,7 +86,7 @@ export default function SettingsScreen() {
         >
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: Colors.light.error }]}>Reset All Progress</Text>
-            <Text style={styles.hint}>Clear history, struggles, and settings</Text>
+            <Text style={styles.hint}>Clear history and mode settings</Text>
           </View>
         </TouchableOpacity>
       </ScrollView>

@@ -40,7 +40,7 @@ function SlidersIcon({ color }: { color: string }) {
 const MODE_CONFIGS: Record<string, ModeConfig> = {
   'times-tables': {
     gameType: 'time-attack',
-    fields: { minNumber: { min: 1, max: 13 }, maxNumber: { min: 1, max: 13 }, timePerProblem: true, anchor: true, problemCount: true, operationType: true, questionStyle: true },
+    fields: { minNumber: { min: 1, max: 13 }, maxNumber: { min: 1, max: 13 }, timePerProblem: true, anchor: true, problemCount: true, operationType: true, questionStyle: true, excludedNumbers: true },
   },
   arithmetic: {
     gameType: 'arith-survival',
@@ -72,9 +72,10 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
   },
 };
 
+
 export default function MainMenu() {
   const router = useRouter();
-  const { colors, isDark, toggleTheme, timed, setTimed, multipleChoice, setMultipleChoice } = useTheme();
+  const { colors, themeMode, setThemeMode, timed, setTimed, multipleChoice, setMultipleChoice } = useTheme();
 
   const [settingsMode, setSettingsMode] = useState<string | null>(null);
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
@@ -94,15 +95,16 @@ export default function MainMenu() {
       </View>
 
       <ScrollView contentContainerStyle={styles.menu} showsVerticalScrollIndicator={false}>
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.primaryDark }]}>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.primaryDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/times-tables/game', params: { type: 'time-attack' } })}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.primary }]}>
-              <Text style={styles.iconText}>×</Text>
-            </View>
+                <Text style={styles.iconText}>×</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Times Tables</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -114,28 +116,28 @@ export default function MainMenu() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.secondaryDark }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.secondaryDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push('/fdp/' as any)}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.secondary }]}>
-              <Text style={styles.iconText}>%</Text>
-            </View>
+                <Text style={styles.iconText}>%</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>FDP Conversions</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.accentDark }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.accentDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/arithmetic/game', params: { type: 'arith-survival' } })}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.accent }]}>
-              <Text style={styles.iconText}>n²</Text>
-            </View>
+                <Text style={styles.iconText}>n²</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Squares & Roots</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -147,15 +149,15 @@ export default function MainMenu() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.errorDark }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.errorDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/primes/game', params: { type: 'primes-time-attack' } })}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.error }]}>
-              <Text style={styles.iconText}>P</Text>
-            </View>
+                <Text style={styles.iconText}>P</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Prime Traps</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -167,15 +169,15 @@ export default function MainMenu() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.secondaryDark }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.secondaryDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/bounding/game', params: { type: 'bound-time-attack' } })}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.secondary }]}>
-              <Text style={styles.iconText}>≈</Text>
-            </View>
+                <Text style={styles.iconText}>≈</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Bounding</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -187,15 +189,15 @@ export default function MainMenu() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.accentDark }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.accentDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/parity/game', params: { type: 'parity-drill' } })}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.accent }]}>
-              <Text style={styles.iconText}>±</Text>
-            </View>
+                <Text style={styles.iconText}>±</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Parity & Sign</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -207,15 +209,15 @@ export default function MainMenu() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.purpleDark }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.purpleDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push('/algebra/' as any)}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.purple }]}>
-              <Text style={styles.iconText}>x²</Text>
-            </View>
+                <Text style={styles.iconText}>x²</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Algebra</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -227,15 +229,15 @@ export default function MainMenu() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.errorDark }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.errorDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/estimation/game', params: { type: 'estimation-drill' } })}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.error }]}>
-              <Text style={styles.iconText}>≈</Text>
-            </View>
+                <Text style={styles.iconText}>≈</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Estimation</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -247,15 +249,15 @@ export default function MainMenu() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.secondaryDark }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.secondaryDark, borderBottomWidth: 5 }]}>
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/datastats/game', params: { type: 'datastats-drill' } })}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.secondary }]}>
-              <Text style={styles.iconText}>📊</Text>
-            </View>
+                <Text style={styles.iconText}>📊</Text>
+              </View>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Data & Stats</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -266,6 +268,22 @@ export default function MainMenu() {
             <SlidersIcon color={colors.muted} />
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={[styles.settingsPill, { backgroundColor: colors.card, borderColor: colors.border }]}
+          activeOpacity={0.7}
+          onPress={() => router.push('/reference' as any)}
+        >
+          <Text style={[styles.settingsPillText, { color: colors.muted }]}>Reference</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.settingsPill, { backgroundColor: colors.card, borderColor: colors.border }]}
+          activeOpacity={0.7}
+          onPress={() => router.push('/settings' as any)}
+        >
+          <Text style={[styles.settingsPillText, { color: colors.muted }]}>⚙️  Settings</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {settingsMode && (
@@ -300,15 +318,19 @@ export default function MainMenu() {
           />
         </View>
 
-        <View style={styles.toggleGroup}>
-          <Text style={styles.themeLabel}>☀️</Text>
-          <Switch
-            trackColor={{ false: colors.border, true: colors.secondary }}
-            thumbColor="#FFF"
-            onValueChange={toggleTheme}
-            value={isDark}
-          />
-          <Text style={styles.themeLabel}>🌙</Text>
+        <View style={[styles.themePill, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {(['light', 'dark', 'work'] as const).map((mode) => (
+            <TouchableOpacity
+              key={mode}
+              style={[styles.themeSeg, themeMode === mode && { backgroundColor: colors.primary }]}
+              onPress={() => setThemeMode(mode)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.themeSegText, themeMode === mode && { color: '#FFF' }]}>
+                {mode === 'light' ? '☀️' : mode === 'dark' ? '🌙' : '💼'}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
     </SafeAreaView>
@@ -395,4 +417,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   themeLabel: { fontSize: 20 },
+  themePill: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  themeSeg: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  themeSegText: {
+    fontSize: 16,
+  },
+  settingsPill: {
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  settingsPillText: {
+    ...Font.body,
+    fontWeight: '600',
+  },
 });

@@ -5,6 +5,7 @@ import {
     Dimensions,
     Keyboard,
     PanResponder,
+  Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -17,8 +18,11 @@ import { useTheme } from '../contexts/ThemeContext';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const STORAGE_KEY = '@matman/ref-table-tab';
+const PAPER_SOUND = require('../assets/paper.wav');
 
 type TableTab = 'multiply' | 'fdp' | 'powers' | 'primes' | 'factorial' | 'unitdigit' | 'algebra';
+
+export type { TableTab };
 
 const TABS: { key: TableTab; label: string }[] = [
   { key: 'multiply', label: '×' },
@@ -54,14 +58,21 @@ function TwoColTable({ rows, colors }: { rows: { left: string; right: string }[]
 
 // ── Table renderers ──
 
-function MultiplyGrid({ colors, highlightRow }: { colors: any; highlightRow?: number }) {
+function MultiplyGrid({ colors, highlightRow, highlightCol, minNumber, maxNumber, excludedNumbers }: { colors: any; highlightRow?: number; highlightCol?: number; minNumber?: number; maxNumber?: number; excludedNumbers?: number[] }) {
   // Auto-fit all 14 columns (1 header + 13 data) into available width – no horizontal scroll needed
   const TAB_RAIL_W = 44;
   const COLS = 14;
   const CELL = Math.floor((SCREEN_W - TAB_RAIL_W) / COLS);
   const FONT = CELL >= 30 ? 12 : CELL >= 24 ? 10 : 9;
   const H_FONT = CELL >= 30 ? 13 : CELL >= 24 ? 11 : 9;
+  const PAIR_FONT = CELL >= 30 ? 7 : CELL >= 24 ? 6 : 5;
   const nums = Array.from({ length: 13 }, (_, i) => i + 1);
+
+  const min = minNumber ?? 1;
+  const max = maxNumber ?? 13;
+  const excluded = new Set(excludedNumbers ?? []);
+  const isActive = (n: number) => n >= min && n <= max && !excluded.has(n);
+  const isRelevant = (n: number) => isActive(n) || highlightRow === n || highlightCol === n;
 
   return (
     <ScrollView style={{ flex: 1 }}>
@@ -71,32 +82,75 @@ function MultiplyGrid({ colors, highlightRow }: { colors: any; highlightRow?: nu
           <View style={[gridStyles.cell(CELL), { backgroundColor: colors.primary }]}>
             <Text style={[gridStyles.headerText, { fontSize: H_FONT }]}>×</Text>
           </View>
-          {nums.map((n) => (
-            <View key={n} style={[gridStyles.cell(CELL), { backgroundColor: colors.primary }]}>
-              <Text style={[gridStyles.headerText, { fontSize: H_FONT }]}>{n}</Text>
-            </View>
-          ))}
+          {nums.map((n) => {
+            const isHL = highlightCol === n;
+            return (
+              <View
+                key={n}
+                style={[
+                  gridStyles.cell(CELL),
+                  { backgroundColor: colors.primary, opacity: isRelevant(n) ? 1 : 0.3 },
+                  isHL && { backgroundColor: colors.accent },
+                ]}
+              >
+                <Text style={[gridStyles.headerText, { fontSize: H_FONT }, isHL && { fontWeight: '900' }]}>{n}</Text>
+              </View>
+            );
+          })}
         </View>
         {/* Data rows */}
         {nums.map((row) => {
           const isHL = highlightRow === row;
+          const rowActive = isRelevant(row);
           return (
-            <View key={row} style={[gridStyles.row, isHL && { backgroundColor: colors.primary + '18' }]}>
-              <View style={[gridStyles.cell(CELL), { backgroundColor: colors.primary, opacity: isHL ? 1 : 0.85 }]}>
+            <View key={row} style={[gridStyles.row, isHL && { backgroundColor: colors.primary + '10' }]}> 
+              <View style={[gridStyles.cell(CELL), { backgroundColor: colors.primary, opacity: rowActive ? (isHL ? 1 : 0.85) : 0.3 }]}>
                 <Text style={[gridStyles.headerText, { fontSize: H_FONT }, isHL && { fontWeight: '900' }]}>{row}</Text>
               </View>
-              {nums.map((col) => (
-                <View
-                  key={col}
-                  style={[
-                    gridStyles.dataCell(CELL),
-                    { borderColor: colors.border },
-                    !isHL && row % 2 === 0 && { backgroundColor: colors.background },
-                  ]}
-                >
-                  <Text style={{ color: colors.text, fontSize: FONT, fontWeight: '500', textAlign: 'center' }}>{row * col}</Text>
-                </View>
-              ))}
+              {nums.map((col) => {
+                const colHL = highlightCol === col;
+                const colActive = isRelevant(col);
+                const cellActive = rowActive && colActive;
+                const cellHL = isHL || colHL;
+                const intersection = isHL && colHL;
+                return (
+                  <View
+                    key={col}
+                    style={[
+                      gridStyles.dataCell(CELL),
+                      { borderColor: colors.border },
+                      !isHL && row % 2 === 0 && { backgroundColor: colors.background },
+                      cellHL && { backgroundColor: colors.primary + '08' },
+                      intersection && { backgroundColor: colors.primary + '12', borderColor: colors.border },
+                    ]}
+                  >
+                    <View style={gridStyles.dataContent}>
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontSize: FONT,
+                          fontWeight: cellHL ? '600' : '500',
+                          textAlign: 'center',
+                          opacity: cellActive ? 1 : 0.2,
+                        }}
+                      >
+                        {row * col}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.muted,
+                          fontSize: PAIR_FONT,
+                          lineHeight: PAIR_FONT + 1,
+                          textAlign: 'center',
+                          opacity: cellActive ? 0.75 : 0.18,
+                        }}
+                      >
+                        {CELL >= 24 ? `(${row}×${col})` : `${row}×${col}`}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           );
         })}
@@ -236,20 +290,96 @@ const TAB_TITLES: Record<TableTab, string> = {
   algebra: 'Algebra Identities',
 };
 
+interface ReferenceBrowserProps {
+  activeTab?: TableTab;
+  onTabChange?: (tab: TableTab) => void;
+  highlightRow?: number;
+  highlightCol?: number;
+  minNumber?: number;
+  maxNumber?: number;
+  excludedNumbers?: number[];
+}
+
+export function ReferenceBrowser({
+  activeTab = 'multiply',
+  onTabChange,
+  highlightRow,
+  highlightCol,
+  minNumber,
+  maxNumber,
+  excludedNumbers,
+}: ReferenceBrowserProps) {
+  const { colors } = useTheme();
+
+  const renderTable = () => {
+    switch (activeTab) {
+      case 'multiply': return <MultiplyGrid colors={colors} highlightRow={highlightRow} highlightCol={highlightCol} minNumber={minNumber} maxNumber={maxNumber} excludedNumbers={excludedNumbers} />;
+      case 'fdp': return <FDPTable colors={colors} />;
+      case 'powers': return <PowersTable colors={colors} />;
+      case 'primes': return <PrimesTable colors={colors} />;
+      case 'factorial': return <FactorialTable colors={colors} />;
+      case 'unitdigit': return <UnitDigitTable colors={colors} />;
+      case 'algebra': return <AlgebraRefTable colors={colors} />;
+    }
+  };
+
+  return (
+    <View style={[styles.browserShell, { backgroundColor: colors.card }]}> 
+      <View style={styles.tableArea}>
+        <View style={[styles.tableHeader, { borderBottomColor: colors.border }]}> 
+          <Text style={[styles.tableTitle, { color: colors.text }]}>
+            {TAB_TITLES[activeTab]}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          {renderTable()}
+        </View>
+      </View>
+
+      <View style={[styles.tabRail, { backgroundColor: colors.primary }]}> 
+        {TABS.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[
+              styles.tabBtn,
+              activeTab === tab.key && { backgroundColor: 'rgba(255,255,255,0.25)' },
+            ]}
+            onPress={() => onTabChange?.(tab.key)}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.tabLabel,
+              activeTab === tab.key && styles.tabLabelActive,
+            ]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 // ── Main component ──
 
 interface Props {
   children: React.ReactNode;
   highlightRow?: number;
+  highlightCol?: number;
+  minNumber?: number;
+  maxNumber?: number;
+  excludedNumbers?: number[];
 }
 
-export default function ReferenceOverlay({ children, highlightRow }: Props) {
+export default function ReferenceOverlay({ children, highlightRow, highlightCol, minNumber, maxNumber, excludedNumbers }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TableTab>('multiply');
-  const tableSlide = useRef(new Animated.Value(SCREEN_W)).current;
+  const tableSlide = useRef(new Animated.Value(24)).current;
+  const tableOpacity = useRef(new Animated.Value(0)).current;
   const tableVisibleRef = useRef(false);
   const [tableVisible, setTableVisible] = useState(false);
+  const paperAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((val) => {
@@ -259,10 +389,92 @@ export default function ReferenceOverlay({ children, highlightRow }: Props) {
     });
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof Audio === 'undefined') return;
+    const soundModule = PAPER_SOUND as { uri?: string; default?: string } | string;
+    const soundUri = typeof soundModule === 'string'
+      ? soundModule
+      : soundModule.uri ?? soundModule.default;
+    if (!soundUri) return;
+
+    const audio = new Audio(soundUri);
+    audio.volume = 0.35;
+    paperAudioRef.current = audio;
+    return () => {
+      audio.pause();
+      paperAudioRef.current = null;
+    };
+  }, []);
+
+  const playPaperSound = useCallback(() => {
+    if (Platform.OS !== 'web') return;
+    const audio = paperAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    void audio.play().catch(() => {
+      // Ignore autoplay restrictions on web until the user has interacted.
+    });
+  }, []);
+
+  const openTable = useCallback(() => {
+    if (tableVisibleRef.current) return;
+    tableVisibleRef.current = true;
+    setTableVisible(true);
+    Keyboard.dismiss();
+    playPaperSound();
+    tableSlide.setValue(24);
+    tableOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(tableSlide, { toValue: 0, duration: 220, useNativeDriver: true }),
+      Animated.timing(tableOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start();
+  }, [playPaperSound, tableOpacity, tableSlide]);
+
+  const closeTable = useCallback(() => {
+    if (!tableVisibleRef.current) return;
+    tableVisibleRef.current = false;
+    playPaperSound();
+    Animated.parallel([
+      Animated.timing(tableSlide, { toValue: 18, duration: 180, useNativeDriver: true }),
+      Animated.timing(tableOpacity, { toValue: 0, duration: 140, useNativeDriver: true }),
+    ]).start(() => setTableVisible(false));
+  }, [playPaperSound, tableOpacity, tableSlide]);
+
+  const toggleTable = useCallback(() => {
+    if (tableVisibleRef.current) {
+      closeTable();
+    } else {
+      openTable();
+    }
+  }, [closeTable, openTable]);
+
   const switchTab = useCallback((tab: TableTab) => {
     setActiveTab(tab);
     AsyncStorage.setItem(STORAGE_KEY, tab);
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const handler = (evt: KeyboardEvent) => {
+      const target = evt.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
+
+      if (evt.key === 'Tab') {
+        evt.preventDefault();
+        toggleTable();
+        return;
+      }
+
+      if (evt.key === 'Escape' && tableVisibleRef.current) {
+        evt.preventDefault();
+        closeTable();
+      }
+    };
+
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [closeTable, toggleTable]);
 
   const openPan = useRef(
     PanResponder.create({
@@ -273,10 +485,7 @@ export default function ReferenceOverlay({ children, highlightRow }: Props) {
       },
       onPanResponderRelease: (_, gs) => {
         if (gs.dx < -80 && !tableVisibleRef.current) {
-          tableVisibleRef.current = true;
-          setTableVisible(true);
-          Keyboard.dismiss();
-          Animated.spring(tableSlide, { toValue: 0, useNativeDriver: true, friction: 7 }).start();
+          openTable();
         }
       },
     }),
@@ -290,9 +499,7 @@ export default function ReferenceOverlay({ children, highlightRow }: Props) {
       },
       onPanResponderRelease: (_, gs) => {
         if (gs.dx > 60) {
-          tableVisibleRef.current = false;
-          Animated.timing(tableSlide, { toValue: SCREEN_W, duration: 250, useNativeDriver: true })
-            .start(() => setTableVisible(false));
+          closeTable();
         }
       },
     }),
@@ -300,7 +507,7 @@ export default function ReferenceOverlay({ children, highlightRow }: Props) {
 
   const renderTable = () => {
     switch (activeTab) {
-      case 'multiply': return <MultiplyGrid colors={colors} highlightRow={highlightRow} />;
+      case 'multiply': return <MultiplyGrid colors={colors} highlightRow={highlightRow} highlightCol={highlightCol} minNumber={minNumber} maxNumber={maxNumber} excludedNumbers={excludedNumbers} />;
       case 'fdp': return <FDPTable colors={colors} />;
       case 'powers': return <PowersTable colors={colors} />;
       case 'primes': return <PrimesTable colors={colors} />;
@@ -318,7 +525,7 @@ export default function ReferenceOverlay({ children, highlightRow }: Props) {
         <Animated.View
           style={[
             styles.overlay,
-            { transform: [{ translateX: tableSlide }] },
+            { opacity: tableOpacity, transform: [{ translateX: tableSlide }] },
           ]}
           {...dismissPan.panHandlers}
         >
@@ -326,47 +533,20 @@ export default function ReferenceOverlay({ children, highlightRow }: Props) {
             style={[
               styles.container,
               {
-                backgroundColor: colors.card,
                 paddingTop: insets.top,
                 paddingBottom: insets.bottom,
               },
             ]}
           >
-            {/* Table content area */}
-            <View style={styles.tableArea}>
-              {/* Header with title */}
-              <View style={[styles.tableHeader, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.tableTitle, { color: colors.text }]}>
-                  {TAB_TITLES[activeTab]}
-                </Text>
-              </View>
-              {/* Scrollable table content */}
-              <View style={{ flex: 1 }}>
-                {renderTable()}
-              </View>
-            </View>
-
-            {/* Vertical tab rail on right edge */}
-            <View style={[styles.tabRail, { backgroundColor: colors.primary }]}>
-              {TABS.map((tab) => (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[
-                    styles.tabBtn,
-                    activeTab === tab.key && { backgroundColor: 'rgba(255,255,255,0.25)' },
-                  ]}
-                  onPress={() => switchTab(tab.key)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.tabLabel,
-                    activeTab === tab.key && styles.tabLabelActive,
-                  ]}>
-                    {tab.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <ReferenceBrowser
+              activeTab={activeTab}
+              onTabChange={switchTab}
+              highlightRow={highlightRow}
+              highlightCol={highlightCol}
+              minNumber={minNumber}
+              maxNumber={maxNumber}
+              excludedNumbers={excludedNumbers}
+            />
           </View>
         </Animated.View>
       )}
@@ -382,6 +562,10 @@ export function SwipeHint() {
 // ── Styles ──
 
 const styles = StyleSheet.create({
+  browserShell: {
+    flex: 1,
+    flexDirection: 'row',
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
@@ -450,6 +634,10 @@ const gridStyles = {
     alignItems: 'center' as const,
     borderWidth: StyleSheet.hairlineWidth,
   }),
+  dataContent: {
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
 };
 
 const tblStyles = StyleSheet.create({

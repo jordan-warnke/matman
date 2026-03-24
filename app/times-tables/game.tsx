@@ -9,30 +9,58 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KnownToggle from '../../components/KnownToggle';
 import NumberPad from '../../components/NumberPad';
-import ReferenceOverlay, { SwipeHint } from '../../components/ReferenceOverlay';
-import StruggleToggle from '../../components/StruggleToggle';
+import PeekHint from '../../components/PeekHint';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import { Problem, useProblemGenerator } from '../../hooks/useProblemGenerator';
 import {
     DEFAULT_MODE_SETTINGS,
     GameType,
-    loadKnown,
     loadModeSettings,
-    loadStruggles,
     ModeSettings,
-    toggleKnown,
-    toggleStruggle,
 } from '../../store/HistoryStore';
 
 
 type Feedback = 'none' | 'correct' | 'wrong';
 
+function formatOptionHint(problem: Problem, option: number): string | null {
+  if (problem.displayMode !== 'multiply') return null;
+
+  const divisors: number[] = [];
+  if (option % problem.a === 0) divisors.push(problem.a);
+  if (problem.b !== problem.a && option % problem.b === 0) divisors.push(problem.b);
+
+  if (divisors.length === 0) {
+    return problem.a === problem.b
+      ? `(not divisible by ${problem.a}!)`
+      : `(not divisible by ${problem.a} or ${problem.b}!)`;
+  }
+
+  const preferredFactor = divisors.includes(problem.a) ? problem.a : divisors[0];
+  return `(${preferredFactor} × ${option / preferredFactor})`;
+}
+
+function formatProblemPrompt(problem: Problem): string {
+  return problem.displayMode === 'divide'
+    ? `${problem.dividend} ÷ ${problem.divisor}`
+    : problem.displayMode === 'square'
+    ? `${problem.base}²`
+    : problem.displayMode === 'root'
+    ? `√${problem.radicand}`
+    : problem.displayMode === 'cube'
+    ? `${problem.base}³`
+    : problem.displayMode === 'cuberoot'
+    ? `∛${problem.radicand}`
+    : `${problem.a} × ${problem.b}`;
+}
+
 export default function GameScreen() {
   const router = useRouter();
-  const { colors, timed, multipleChoice } = useTheme();
+  const { colors, timed, multipleChoice, isWork } = useTheme();
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType: GameType = (type || 'time-attack') as GameType;
 
@@ -46,12 +74,18 @@ export default function GameScreen() {
       setSettings(s);
       setReady(true);
     });
-    loadStruggles().then((s) => { strugglesRef.current = s; });
-    loadKnown().then((k) => { knownRef.current = k; });
   }, [gameType]);
 
   // ── problem generator ──
-  const { generate, record, reshuffleOptions } = useProblemGenerator(settings.maxNumber, settings.anchor, settings.minNumber, settings.questionStyle, settings.operationType);
+  const { generate, record, reshuffleOptions } = useProblemGenerator(
+    settings.maxNumber,
+    settings.anchor,
+    settings.minNumber,
+    settings.questionStyle,
+    settings.operationType,
+    settings.excludedNumbers,
+    settings.excludeSquarePairs,
+  );
 
   // ── game state ──
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -64,12 +98,7 @@ export default function GameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-
-  // ── struggle / known tracking ──
-  const strugglesRef = useRef<Set<string>>(new Set());
-  const knownRef = useRef<Set<string>>(new Set());
-  const [currentStruggling, setCurrentStruggling] = useState(false);
-  const [currentKnown, setCurrentKnown] = useState(false);
+  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
 
   // ── refs for per-problem timer ──
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,13 +106,19 @@ export default function GameScreen() {
   const pausedRef = useRef(false);  // true when awaiting next / showing feedback
   const remainingRef = useRef(0);   // remaining seconds at pause time
   const submittedRef = useRef(false); // prevents timer/submit race
+  const graceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceReadyRef = useRef(0);
 
   // ── animations ──
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const selectedOptionTranslateX = useRef(new Animated.Value(0)).current;
+  const selectedOptionTranslateY = useRef(new Animated.Value(0)).current;
+  const selectedOptionScale = useRef(new Animated.Value(1)).current;
 
   // ── start per-problem timer ──
   const startProblemTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
     pausedRef.current = false;
     submittedRef.current = false;
     const deadline = Date.now() + settings.timeAttackSeconds * 1000;
@@ -94,14 +129,17 @@ export default function GameScreen() {
       if (remaining <= 0) {
         clearInterval(timerRef.current!);
         timerRef.current = null;
-        if (submittedRef.current) return; // user already answered
-        submittedRef.current = true;
-        pausedRef.current = true;
         setTimer(0);
-        setFeedback('wrong');
-        setStreak(0);
-        setAnswered((c) => c + 1);
-        setAwaitingNext(true);
+        graceTimeoutRef.current = setTimeout(() => {
+          if (submittedRef.current) return;
+          submittedRef.current = true;
+          pausedRef.current = true;
+          setFeedback('wrong');
+          setStreak(0);
+          setAnswered((c) => c + 1);
+          setAwaitingNext(true);
+          advanceReadyRef.current = Date.now() + 500;
+        }, 200);
       } else {
         setTimer(remaining);
       }
@@ -114,8 +152,6 @@ export default function GameScreen() {
     const p = generate();
     setProblem(p);
     problemStartRef.current = Date.now();
-    setCurrentStruggling(strugglesRef.current.has(`${p.a}x${p.b}`) || strugglesRef.current.has(`${p.b}x${p.a}`));
-    setCurrentKnown(knownRef.current.has(`${p.a}x${p.b}`) || knownRef.current.has(`${p.b}x${p.a}`));
 
     if (timed) {
       startProblemTimer();
@@ -123,6 +159,7 @@ export default function GameScreen() {
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (graceTimeoutRef.current) clearTimeout(graceTimeoutRef.current);
     };
   }, [ready]);
 
@@ -135,6 +172,44 @@ export default function GameScreen() {
       Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
     ]).start();
   }, [shakeAnim]);
+
+  const resetSelectedOptionAnimation = useCallback(() => {
+    selectedOptionTranslateX.stopAnimation();
+    selectedOptionTranslateY.stopAnimation();
+    selectedOptionScale.stopAnimation();
+    selectedOptionTranslateX.setValue(0);
+    selectedOptionTranslateY.setValue(0);
+    selectedOptionScale.setValue(1);
+  }, [selectedOptionScale, selectedOptionTranslateX, selectedOptionTranslateY]);
+
+  const animateSelectedOption = useCallback((isCorrect: boolean) => {
+    resetSelectedOptionAnimation();
+
+    if (isCorrect) {
+      Animated.sequence([
+        Animated.timing(selectedOptionScale, {
+          toValue: 1.035,
+          duration: 110,
+          useNativeDriver: true,
+        }),
+        Animated.spring(selectedOptionScale, {
+          toValue: 1,
+          friction: 7,
+          tension: 120,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    Animated.sequence([
+      Animated.timing(selectedOptionTranslateX, { toValue: 12, duration: 45, useNativeDriver: true }),
+      Animated.timing(selectedOptionTranslateX, { toValue: -12, duration: 45, useNativeDriver: true }),
+      Animated.timing(selectedOptionTranslateX, { toValue: 8, duration: 40, useNativeDriver: true }),
+      Animated.timing(selectedOptionTranslateX, { toValue: -8, duration: 40, useNativeDriver: true }),
+      Animated.timing(selectedOptionTranslateX, { toValue: 0, duration: 35, useNativeDriver: true }),
+    ]).start();
+  }, [resetSelectedOptionAnimation, selectedOptionScale, selectedOptionTranslateX, selectedOptionTranslateY]);
 
   // ── answer submission ──
   const submit = useCallback(
@@ -150,25 +225,64 @@ export default function GameScreen() {
       // Stop timer immediately
       pausedRef.current = true;
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
+      hidePeek();
 
-      await record(problem.a, problem.b, isCorrect, elapsed);
+      const recordedCorrect = isCorrect && !peekUsed;
+      await record(problem.a, problem.b, recordedCorrect, elapsed);
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
+        if (multipleChoice) animateSelectedOption(true);
         setFeedback('correct');
-        setStreak((s) => s + 1);
-        setCorrectCount((c) => c + 1);
+        if (peekUsed) { setStreak(0); } else { setStreak((s) => s + 1); }
+        if (!peekUsed) setCorrectCount((c) => c + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setAwaitingNext(true);
+
+        if (multipleChoice) {
+          // MC mode: linger to show correct answer
+          advanceReadyRef.current = Date.now() + 500;
+          setAwaitingNext(true);
+        } else {
+          // Manual entry: auto-advance on correct
+          setTimeout(() => {
+            if (settings.problemCount > 0 && answered + 1 >= settings.problemCount) {
+              setGameOver(true);
+              return;
+            }
+            const next = generate();
+            setProblem(next);
+            problemStartRef.current = Date.now();
+            setInput('');
+            setFeedback('none');
+            setAwaitingNext(false);
+            setSelectedOption(null);
+            submittedRef.current = false;
+            if (timed) startProblemTimer();
+          }, 300);
+        }
       } else {
+        if (multipleChoice) animateSelectedOption(false);
         setFeedback('wrong');
         triggerShake();
         setStreak(0);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setAwaitingNext(true);
+
+        if (multipleChoice) {
+          advanceReadyRef.current = Date.now() + 500;
+          setAwaitingNext(true);
+        } else {
+          // Manual entry: stay put, let user retry
+          setTimeout(() => {
+            setInput('');
+            setFeedback('none');
+            setSelectedOption(null);
+            submittedRef.current = false;
+          }, 800);
+        }
       }
     },
-    [problem, feedback, gameOver, record, generate, triggerShake],
+    [problem, feedback, gameOver, record, generate, triggerShake, multipleChoice, animateSelectedOption, hidePeek, peekUsed],
   );
 
   // ── input submit handler ──
@@ -177,8 +291,18 @@ export default function GameScreen() {
     if (!isNaN(n)) submit(n);
   }, [input, submit]);
 
+  const handleWebInputKey = useCallback((key: string) => {
+    if (!/^\d$/.test(key)) return;
+    setInput((prev) => prev + key);
+  }, []);
+
+  const handleWebBackspace = useCallback(() => {
+    setInput((prev) => prev.slice(0, -1));
+  }, []);
+
   // ── advance to next problem ──
   const advanceNext = useCallback(() => {
+    if (Date.now() < advanceReadyRef.current) return;
     // Check if problem count reached
     if (settings.problemCount > 0 && answered >= settings.problemCount) {
       setGameOver(true);
@@ -191,29 +315,11 @@ export default function GameScreen() {
     setFeedback('none');
     setAwaitingNext(false);
     setSelectedOption(null);
-    setCurrentStruggling(strugglesRef.current.has(`${next.a}x${next.b}`) || strugglesRef.current.has(`${next.b}x${next.a}`));
-    setCurrentKnown(knownRef.current.has(`${next.a}x${next.b}`) || knownRef.current.has(`${next.b}x${next.a}`));
+    resetSelectedOptionAnimation();
+    resetPeek();
     submittedRef.current = false;
     if (timed) startProblemTimer();
-  }, [generate, answered, settings.problemCount, timed, startProblemTimer]);
-
-  const handleToggleStruggle = useCallback(async () => {
-    if (!problem) return;
-    const key = `${problem.a}x${problem.b}`;
-    const nowStruggling = await toggleStruggle(key);
-    setCurrentStruggling(nowStruggling);
-    strugglesRef.current = await loadStruggles();
-    if (nowStruggling) { knownRef.current = await loadKnown(); setCurrentKnown(false); }
-  }, [problem]);
-
-  const handleToggleKnown = useCallback(async () => {
-    if (!problem) return;
-    const key = `${problem.a}x${problem.b}`;
-    const nowKnown = await toggleKnown(key);
-    setCurrentKnown(nowKnown);
-    knownRef.current = await loadKnown();
-    if (nowKnown) { strugglesRef.current = await loadStruggles(); setCurrentStruggling(false); }
-  }, [problem]);
+  }, [generate, answered, settings.problemCount, timed, startProblemTimer, resetSelectedOptionAnimation, resetPeek]);
 
   const repeatQuestion = useCallback(() => {
     if (problem) setProblem({ ...problem, options: reshuffleOptions(problem) });
@@ -221,10 +327,12 @@ export default function GameScreen() {
     setAwaitingNext(false);
     setInput('');
     setSelectedOption(null);
+    resetSelectedOptionAnimation();
+    resetPeek();
     submittedRef.current = false;
     problemStartRef.current = Date.now();
     if (timed) startProblemTimer();
-  }, [timed, startProblemTimer, problem, reshuffleOptions]);
+  }, [timed, startProblemTimer, problem, reshuffleOptions, resetSelectedOptionAnimation, resetPeek]);
 
   // ── render helpers ──
 
@@ -234,6 +342,27 @@ export default function GameScreen() {
       : feedback === 'wrong'
         ? colors.error
         : colors.text;
+
+  // ── work-mode formula text ──
+  const workFormula = problem
+    ? formatProblemPrompt(problem)
+    : '';
+
+  const completionAnswer = problem ? String(problem.answer) : '';
+  useWebShortcuts(
+    problem && multipleChoice
+      ? problem.options.map(opt =>
+          feedback !== 'none' && opt === problem.answer ? advanceNext
+          : feedback !== 'none' ? null
+          : () => submit(opt))
+      : [],
+    awaitingNext ? advanceNext : undefined,
+    !multipleChoice && !awaitingNext ? handleInputSubmit : undefined,
+    !multipleChoice && !awaitingNext && feedback === 'none' ? handleWebInputKey : undefined,
+    !multipleChoice && !awaitingNext && feedback === 'none' ? handleWebBackspace : undefined,
+    !awaitingNext && feedback === 'none' ? showPeek : undefined,
+    peekVisible ? hidePeek : undefined,
+  );
 
   if (!ready || !problem) {
     return (
@@ -256,12 +385,11 @@ export default function GameScreen() {
       setInput('');
       setFeedback('none');
       setAwaitingNext(false);
+      resetPeek();
       submittedRef.current = false;
       const p = generate();
       setProblem(p);
       problemStartRef.current = Date.now();
-      setCurrentStruggling(strugglesRef.current.has(`${p.a}x${p.b}`) || strugglesRef.current.has(`${p.b}x${p.a}`));
-      setCurrentKnown(knownRef.current.has(`${p.a}x${p.b}`) || knownRef.current.has(`${p.b}x${p.a}`));
       if (timed) startProblemTimer();
     };
     return (
@@ -291,8 +419,31 @@ export default function GameScreen() {
   }
 
   return (
-    <ReferenceOverlay highlightRow={problem?.a}>
-          <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+          <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
+          <SpreadsheetChrome
+            formula={workFormula}
+            cellRef="D5"
+            options={multipleChoice ? problem.options.map((opt) => ({
+              label: String(opt),
+              onPress: () => submit(opt),
+            })) : undefined}
+            inputValue={!multipleChoice ? input : undefined}
+            onInputChange={!multipleChoice ? (v) => setInput(v) : undefined}
+            onInputSubmit={!multipleChoice ? handleInputSubmit : undefined}
+            feedbackState={feedback === 'none' ? null : feedback}
+            correctAnswer={String(problem.answer)}
+            revealedAnswer={completionAnswer}
+            peekValue={completionAnswer}
+            peekVisible={peekVisible && feedback === 'none'}
+            selectedValue={selectedOption !== null ? String(selectedOption) : undefined}
+            selectedOptionTranslateX={selectedOptionTranslateX}
+            selectedOptionTranslateY={selectedOptionTranslateY}
+            selectedOptionScale={selectedOptionScale}
+            onBack={() => router.back()}
+            onNext={awaitingNext ? advanceNext : undefined}
+            onRepeat={awaitingNext ? repeatQuestion : undefined}
+            onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+          >
             {/* Header */}
             <View style={styles.header}>
               <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -321,32 +472,34 @@ export default function GameScreen() {
 
             {/* Problem */}
             <View style={styles.problemArea}>
-              <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-                <Text style={[styles.problemText, { color: feedbackColor }]}>
-                  {problem.displayMode === 'divide'
-                    ? `${problem.dividend} ÷ ${problem.divisor}`
-                    : problem.displayMode === 'square'
-                    ? `${problem.base}²`
-                    : problem.displayMode === 'root'
-                    ? `√${problem.radicand}`
-                    : problem.displayMode === 'cube'
-                    ? `${problem.base}³`
-                    : problem.displayMode === 'cuberoot'
-                    ? `∛${problem.radicand}`
-                    : `${problem.a} × ${problem.b}`}
+              <View style={styles.problemInlineRow}>
+                <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+                  <Text style={[styles.problemText, { color: feedbackColor }]}> 
+                    {formatProblemPrompt(problem)}
+                  </Text>
+                </Animated.View>
+                <Text
+                  style={[
+                    styles.inlineReveal,
+                    {
+                      color: feedback !== 'none'
+                        ? colors.correct
+                        : peekVisible
+                        ? colors.primary
+                        : 'transparent',
+                    },
+                  ]}
+                >
+                  = {completionAnswer}
                 </Text>
-              </Animated.View>
+              </View>
 
-              {feedback === 'correct' && (
-                <Text style={[styles.correctHint, { color: colors.correct }]}>= {problem.answer}</Text>
-              )}
-              {feedback === 'wrong' && (
-                <>
-                  {selectedOption !== null && (
-                    <Text style={[styles.correctHint, { color: colors.error }]}>✗ {selectedOption}</Text>
-                  )}
-                  <Text style={[styles.correctHint, { color: colors.correct }]}>= {problem.answer}</Text>
-                </>
+              {problem.resurfacing && (
+                <View style={[styles.reviewPill, { backgroundColor: colors.card, borderColor: colors.border }]}> 
+                  <Text style={[styles.reviewPillText, { color: colors.muted }]}>
+                    {problem.resurfacing === 'retry' ? '↺ Retry' : '↺ Review'}
+                  </Text>
+                </View>
               )}
             </View>
 
@@ -354,22 +507,55 @@ export default function GameScreen() {
             <View style={styles.answerArea}>
               {multipleChoice ? (
                 <View style={styles.mcGrid}>
-                  {problem.options.map((opt) => (
-                    <TouchableOpacity
+                  {problem.options.map((opt, index) => {
+                    const optionHint = formatOptionHint(problem, opt);
+                    const isSelected = selectedOption === opt;
+                    return (
+                    <Animated.View
                       key={opt}
                       style={[
-                        styles.mcBtn,
-                        { backgroundColor: colors.card, borderColor: colors.border },
-                        feedback === 'correct' && opt === problem.answer && { borderColor: colors.correct, backgroundColor: colors.background },
-                        feedback === 'wrong' && opt === problem.answer && { borderColor: colors.error, backgroundColor: colors.background },
+                        styles.mcBtnWrap,
+                        isSelected
+                          ? {
+                              transform: [
+                                { translateX: selectedOptionTranslateX },
+                                { translateY: selectedOptionTranslateY },
+                                { scale: selectedOptionScale },
+                              ],
+                            }
+                          : undefined,
                       ]}
-                      activeOpacity={0.7}
-                      onPress={() => submit(opt)}
-                      disabled={feedback !== 'none'}
                     >
-                      <Text style={[styles.mcText, { color: colors.text }]}>{opt}</Text>
-                    </TouchableOpacity>
-                  ))}
+                      <TouchableOpacity
+                        style={[
+                          styles.mcBtn,
+                          { backgroundColor: colors.card, borderColor: colors.border },
+                          feedback === 'correct' && opt === problem.answer && { borderColor: colors.correct, backgroundColor: colors.background },
+                          feedback === 'wrong' && opt === problem.answer && { borderColor: colors.error, backgroundColor: colors.background },
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={feedback !== 'none' && opt === problem.answer ? advanceNext : () => submit(opt)}
+                        disabled={feedback !== 'none' && opt !== problem.answer}
+                      >
+                        <View style={[styles.optionKeyPill, { backgroundColor: colors.background, borderColor: colors.border }]}> 
+                          <Text style={[styles.optionKeyText, { color: colors.muted }]}>{index + 1}</Text>
+                        </View>
+                        <Text style={[styles.mcText, { color: colors.text }]}>{opt}</Text>
+                        {optionHint && (
+                          <Text
+                            style={[
+                              styles.mcHintText,
+                              { color: colors.muted, opacity: feedback !== 'none' ? 0.85 : 0 },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {optionHint}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </Animated.View>
+                    );
+                  })}
                 </View>
               ) : (
                 <>
@@ -392,37 +578,34 @@ export default function GameScreen() {
                   )}
                 </>
               )}
-              {awaitingNext && (
-                <View style={styles.navRow}>
-                  <TouchableOpacity
-                    style={[styles.repeatBtn, { borderColor: colors.border }]}
-                    activeOpacity={0.7}
-                    onPress={repeatQuestion}
-                  >
-                    <Text style={[styles.repeatText, { color: colors.muted }]}>↺</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.nextBtn, { flex: 1, backgroundColor: colors.primary, borderBottomColor: colors.primaryDark }]}
-                    activeOpacity={0.85}
-                    onPress={advanceNext}
-                  >
-                    <Text style={styles.nextText}>→</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <View
+                style={[styles.navRow, !awaitingNext && styles.navRowHidden]}
+                pointerEvents={awaitingNext ? 'auto' : 'none'}
+              >
+                <TouchableOpacity
+                  style={[styles.repeatBtn, { borderColor: colors.border }]}
+                  activeOpacity={0.7}
+                  onPress={repeatQuestion}
+                  disabled={!awaitingNext}
+                >
+                  <Text style={[styles.repeatText, { color: colors.muted }]}>↺</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.nextBtn, { flex: 1, backgroundColor: colors.primary, borderBottomColor: colors.primaryDark }]}
+                  activeOpacity={0.85}
+                  onPress={advanceNext}
+                  disabled={!awaitingNext}
+                >
+                  <Text style={styles.nextText}>→</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.footer}>
-              <SwipeHint />
-              {awaitingNext && (
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <StruggleToggle isStruggling={currentStruggling} onToggle={handleToggleStruggle} />
-                  <KnownToggle isKnown={currentKnown} onToggle={handleToggleKnown} />
-                </View>
-              )}
+              <PeekHint />
             </View>
+          </SpreadsheetChrome>
           </SafeAreaView>
-    </ReferenceOverlay>
   );
 }
 
@@ -459,15 +642,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  problemInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
   problemText: {
     fontSize: 56,
     fontWeight: '800',
   },
-  correctHint: {
+  inlineReveal: {
     ...Font.h2,
-    marginTop: Spacing.sm,
+    minWidth: 48,
+    textAlign: 'left',
   },
-
+  reviewPill: {
+    marginTop: Spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  reviewPillText: {
+    ...Font.caption,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
   // answers
   answerArea: {
     paddingHorizontal: Spacing.xl,
@@ -503,6 +705,9 @@ const styles = StyleSheet.create({
   nextText: { fontSize: 28, fontWeight: '800', color: '#FFF' },
 
   navRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
+  navRowHidden: {
+    opacity: 0,
+  },
   repeatBtn: { borderRadius: 16, paddingVertical: 14, paddingHorizontal: 20, borderWidth: 2, borderBottomWidth: 4 },
   repeatText: { fontSize: 24, fontWeight: '700' },
 
@@ -512,8 +717,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.sm,
   },
-  mcBtn: {
+  mcBtnWrap: {
     width: '45%',
+  },
+  mcBtn: {
+    width: '100%',
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: 'center',
@@ -521,6 +729,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 4,
   },
   mcText: { ...Font.h2 },
+  mcHintText: {
+    ...Font.caption,
+    marginTop: 4,
+    opacity: 0.85,
+  },
+  optionKeyPill: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    minWidth: 24,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionKeyText: {
+    ...Font.caption,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
 
   // footer
   footer: {

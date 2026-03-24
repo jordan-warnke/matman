@@ -1,56 +1,124 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const HISTORY_KEY = '@matman/history';
 const SETTINGS_KEY = '@matman/settings';
 const MODE_SETTINGS_PREFIX = '@matman/mode-settings/';
-const STRUGGLES_KEY = '@matman/struggles';
-const KNOWN_KEY = '@matman/known';
 
 export interface AttemptRecord {
   correct: number;
   wrong: number;
   totalTime: number;
   lastSeen: number;
+  lastWrong?: number;
+}
+
+export interface ReviewPriority {
+  weight: number;
+  isDue: boolean;
+  targetHours: number;
+  hoursSince: number;
 }
 
 // Keyed as "3x7" — we keep a×b and b×a as distinct entries
 // so the user gets drilled on both orderings.
 export type History = Record<string, AttemptRecord>;
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+async function storageGetItem(key: string): Promise<string | null> {
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    return localStorage.getItem(key);
+  }
+  return AsyncStorage.getItem(key);
+}
+
+async function storageSetItem(key: string, value: string): Promise<void> {
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    localStorage.setItem(key, value);
+    return;
+  }
+  await AsyncStorage.setItem(key, value);
+}
+
+async function storageGetAllKeys(): Promise<string[]> {
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    return Object.keys(localStorage);
+  }
+  return Array.from(await AsyncStorage.getAllKeys());
+}
+
+async function storageMultiRemove(keys: string[]): Promise<void> {
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    keys.forEach((key) => localStorage.removeItem(key));
+    return;
+  }
+  await AsyncStorage.multiRemove(keys);
+}
+
 /**
- * Anki-like weight: recency + manual struggle boost only.
- *  - Unseen problems get high weight (need to introduce).
- *  - Recently-seen problems are suppressed (avoid repeats).
- *  - Stale problems get a review boost over time.
- *  - Manually-flagged "struggle" items get 3× weight.
+ * Duolingo-style review urgency.
+ * - `known` wins over everything and is strongly suppressed.
+ * - `struggle` raises urgency, but only inside the currently eligible pool.
+ * - Recent items are still suppressed to avoid churn.
+ * - Due/overdue items get a strong boost so normal practice can inject review.
  */
-export function ankiWeight(rec: AttemptRecord | undefined, struggling = false, known = false): number {
-  if (!rec) return 5; // unseen — high priority to introduce
-
-  const hoursSince = (Date.now() - rec.lastSeen) / 3_600_000;
-
-  let recency: number;
-  if (hoursSince < 0.083) {
-    // < 5 min ago — suppress to avoid in-session repeats
-    recency = 0.2;
-  } else if (hoursSince < 1) {
-    recency = 0.8;
-  } else if (hoursSince < 24) {
-    recency = 1.0;
-  } else {
-    // over a day — review boost that grows with time, capped
-    recency = Math.min(2.5, 1.0 + Math.log2(hoursSince / 24) * 0.3);
+export function getReviewPriority(rec: AttemptRecord | undefined): ReviewPriority {
+  if (!rec) {
+    return {
+      weight: 6,
+      isDue: true,
+      targetHours: 0,
+      hoursSince: Number.POSITIVE_INFINITY,
+    };
   }
 
-  if (struggling) return recency * 3;
-  if (known) return recency * 0.5;
-  return recency;
+  const attempts = Math.max(1, rec.correct + rec.wrong);
+  const accuracy = rec.correct / attempts;
+  const errorRate = rec.wrong / attempts;
+  const avgSeconds = rec.totalTime / attempts / 1000;
+  const hoursSince = (Date.now() - rec.lastSeen) / 3_600_000;
+
+  let targetHours = 12 + rec.correct * 10;
+  targetHours *= 0.8 + accuracy;
+  targetHours /= 1 + errorRate * 1.5;
+
+  if (avgSeconds > 8) targetHours *= 0.9;
+
+  targetHours = clamp(targetHours, 6, 14 * 24);
+
+  const isDue = hoursSince >= targetHours;
+
+  if (hoursSince < 0.083) {
+    return { weight: 0.05, isDue: false, targetHours, hoursSince };
+  }
+
+  if (hoursSince < 1) {
+    return { weight: 0.2, isDue: false, targetHours, hoursSince };
+  }
+
+  const overdueRatio = targetHours <= 0 ? 1 : hoursSince / targetHours;
+  let weight = 0.8 + accuracy * 0.8;
+
+  if (isDue) {
+    weight += 2.5 + Math.min(6, (overdueRatio - 1) * 2.5);
+  } else {
+    weight *= 0.6 + overdueRatio * 0.8;
+  }
+
+  return { weight, isDue, targetHours, hoursSince };
+}
+
+export function ankiWeight(rec: AttemptRecord | undefined): number {
+  return getReviewPriority(rec).weight;
 }
 
 // ── Global settings (theme only) ───────────────────────────
 
 export interface GlobalSettings {
-  theme: 'light' | 'dark' | 'system';
+  theme: 'light' | 'dark' | 'work' | 'system';
   timed: boolean;
   multipleChoice: boolean;
 }
@@ -73,6 +141,8 @@ export interface ModeSettings {
   anchor: number | null;
   problemCount: number;
   timed: boolean;
+  excludedNumbers: number[];
+  excludeSquarePairs: boolean;
 }
 
 export const DEFAULT_MODE_SETTINGS: ModeSettings = {
@@ -85,7 +155,37 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
   anchor: null,
   problemCount: 0, // 0 = unlimited
   timed: false,
+  excludedNumbers: [],
+  excludeSquarePairs: false,
 };
+
+export function sanitizeModeSettings(settings: ModeSettings): ModeSettings {
+  const maxNumber = clamp(settings.maxNumber, 1, 13);
+  const minNumber = clamp(settings.minNumber, 1, maxNumber);
+  const anchor = settings.anchor == null ? null : clamp(settings.anchor, 1, 13);
+
+  const excludedNumbers = [...new Set(settings.excludedNumbers ?? [])]
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= 13)
+    .sort((a, b) => a - b);
+
+  const sanitizedExcluded = excludedNumbers.filter((n) => n !== anchor);
+  const activeRange = new Set<number>();
+  for (let n = minNumber; n <= maxNumber; n++) activeRange.add(n);
+
+  const hasPlayableB = [...activeRange].some((n) => !sanitizedExcluded.includes(n));
+  if (!hasPlayableB) {
+    sanitizedExcluded.splice(sanitizedExcluded.indexOf(minNumber), sanitizedExcluded.includes(minNumber) ? 1 : 0);
+  }
+
+  return {
+    ...settings,
+    maxNumber,
+    minNumber,
+    anchor,
+    excludedNumbers: sanitizedExcluded,
+    excludeSquarePairs: !!settings.excludeSquarePairs,
+  };
+}
 
 export type GameType =
   | 'time-attack' | 'free-form'
@@ -108,7 +208,7 @@ function makeKey(a: number, b: number) {
 // ── public API ─────────────────────────────────────────────
 
 export async function loadHistory(): Promise<History> {
-  const raw = await AsyncStorage.getItem(HISTORY_KEY);
+  const raw = await storageGetItem(HISTORY_KEY);
   return raw ? JSON.parse(raw) : {};
 }
 
@@ -134,28 +234,31 @@ export async function recordByKey(
     wrong: prev.wrong + (isCorrect ? 0 : 1),
     totalTime: prev.totalTime + timeMs,
     lastSeen: Date.now(),
+    lastWrong: isCorrect ? prev.lastWrong : Date.now(),
   };
 
-  await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  await storageSetItem(HISTORY_KEY, JSON.stringify(history));
 }
 
 // ── Global settings ────────────────────────────────────────
 
 export async function loadGlobalSettings(): Promise<GlobalSettings> {
-  const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+  const raw = await storageGetItem(SETTINGS_KEY);
   return raw ? { ...DEFAULT_GLOBAL, ...JSON.parse(raw) } : DEFAULT_GLOBAL;
 }
 
 export async function saveGlobalSettings(patch: Partial<GlobalSettings>): Promise<void> {
   const current = await loadGlobalSettings();
-  await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...current, ...patch }));
+  await storageSetItem(SETTINGS_KEY, JSON.stringify({ ...current, ...patch }));
 }
 
 // ── Per-mode settings ──────────────────────────────────────
 
 export async function loadModeSettings(gameType: GameType): Promise<ModeSettings> {
-  const raw = await AsyncStorage.getItem(MODE_SETTINGS_PREFIX + gameType);
-  return raw ? { ...DEFAULT_MODE_SETTINGS, ...JSON.parse(raw) } : DEFAULT_MODE_SETTINGS;
+  const raw = await storageGetItem(MODE_SETTINGS_PREFIX + gameType);
+  return raw
+    ? sanitizeModeSettings({ ...DEFAULT_MODE_SETTINGS, ...JSON.parse(raw) })
+    : DEFAULT_MODE_SETTINGS;
 }
 
 export async function saveModeSettings(
@@ -163,76 +266,19 @@ export async function saveModeSettings(
   patch: Partial<ModeSettings>,
 ): Promise<void> {
   const current = await loadModeSettings(gameType);
-  await AsyncStorage.setItem(
+  const next = sanitizeModeSettings({ ...current, ...patch });
+  await storageSetItem(
     MODE_SETTINGS_PREFIX + gameType,
-    JSON.stringify({ ...current, ...patch }),
+    JSON.stringify(next),
   );
-}
-
-// ── Struggle pairs ─────────────────────────────────────────
-
-export async function loadStruggles(): Promise<Set<string>> {
-  const raw = await AsyncStorage.getItem(STRUGGLES_KEY);
-  return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
-}
-
-export async function toggleStruggle(key: string): Promise<boolean> {
-  const struggles = await loadStruggles();
-  const nowStruggling = !struggles.has(key);
-  if (nowStruggling) {
-    struggles.add(key);
-    // Mutually exclusive: remove from known
-    const known = await loadKnown();
-    if (known.has(key)) {
-      known.delete(key);
-      await AsyncStorage.setItem(KNOWN_KEY, JSON.stringify([...known]));
-    }
-  } else {
-    struggles.delete(key);
-  }
-  await AsyncStorage.setItem(STRUGGLES_KEY, JSON.stringify([...struggles]));
-  return nowStruggling;
-}
-
-export async function clearStruggles(): Promise<void> {
-  await AsyncStorage.removeItem(STRUGGLES_KEY);
-}
-
-// ── Known (mastered) items ─────────────────────────────────
-
-export async function loadKnown(): Promise<Set<string>> {
-  const raw = await AsyncStorage.getItem(KNOWN_KEY);
-  return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
-}
-
-export async function toggleKnown(key: string): Promise<boolean> {
-  const known = await loadKnown();
-  const nowKnown = !known.has(key);
-  if (nowKnown) {
-    known.add(key);
-    // Mutually exclusive: remove from struggles
-    const struggles = await loadStruggles();
-    if (struggles.has(key)) {
-      struggles.delete(key);
-      await AsyncStorage.setItem(STRUGGLES_KEY, JSON.stringify([...struggles]));
-    }
-  } else {
-    known.delete(key);
-  }
-  await AsyncStorage.setItem(KNOWN_KEY, JSON.stringify([...known]));
-  return nowKnown;
-}
-
-export async function clearKnown(): Promise<void> {
-  await AsyncStorage.removeItem(KNOWN_KEY);
 }
 
 // ── Reset all progress ─────────────────────────────────────
 
 export async function resetAllProgress(): Promise<void> {
-  const allKeys = await AsyncStorage.getAllKeys();
+  const allKeys = await storageGetAllKeys();
   const matmanKeys = allKeys.filter((k) => k.startsWith('@matman/'));
   // Keep global settings (theme preference), clear everything else
   const toDelete = matmanKeys.filter((k) => k !== SETTINGS_KEY);
-  if (toDelete.length > 0) await AsyncStorage.multiRemove(toDelete);
+  if (toDelete.length > 0) await storageMultiRemove(toDelete);
 }

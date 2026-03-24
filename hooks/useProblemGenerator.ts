@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { History, ankiWeight, loadHistory, loadKnown, loadStruggles, recordAttempt } from '../store/HistoryStore';
+import { getReviewPriority, History, loadHistory, recordAttempt } from '../store/HistoryStore';
 import {
     addInsteadOfMultiply,
     adjacentSquares,
@@ -19,6 +19,7 @@ export interface Problem {
   answer: number;
   options: number[];
   displayMode: 'multiply' | 'divide' | 'square' | 'root' | 'cube' | 'cuberoot';
+  resurfacing?: 'retry' | 'review';
   /** For divide mode: the dividend (a*b) */
   dividend?: number;
   /** For divide mode: the divisor */
@@ -30,6 +31,35 @@ export interface Problem {
 }
 
 const RECENT_QUEUE_SIZE = 16;
+const RETRY_MIN_GAP = 3;
+const RETRY_MAX_GAP = 6;
+const RETRY_MAX_WINDOW_MS = 15 * 60 * 1000;
+const REVIEW_INJECTION_RATE = 0.4;
+
+interface RetryEntry {
+  key: string;
+  gap: number;
+}
+
+function randomRetryGap(): number {
+  return Math.floor(Math.random() * (RETRY_MAX_GAP - RETRY_MIN_GAP + 1)) + RETRY_MIN_GAP;
+}
+
+function pickWeighted<T>(pool: T[], getWeight: (entry: T) => number): T {
+  const totalWeight = pool.reduce((sum, entry) => sum + Math.max(0, getWeight(entry)), 0);
+
+  if (totalWeight <= 0) {
+    return pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
+  }
+
+  let rand = Math.random() * totalWeight;
+  for (const entry of pool) {
+    rand -= Math.max(0, getWeight(entry));
+    if (rand <= 0) return entry;
+  }
+
+  return pool[pool.length - 1] ?? pool[0];
+}
 
 /**
  * Builds the full pool of problems.
@@ -44,16 +74,15 @@ export function useProblemGenerator(
   minNumber = 1,
   questionStyle: 'standard' | 'reverse' | 'mix' = 'standard',
   operationType: 'multiply' | 'squares' | 'cubes' = 'multiply',
+  excludedNumbers: number[] = [],
+  excludeSquarePairs = false,
 ) {
   const historyRef = useRef<History>({});
-  const strugglesRef = useRef<Set<string>>(new Set());
-  const knownRef = useRef<Set<string>>(new Set());
   const recentRef = useRef<string[]>([]);
+  const retryQueueRef = useRef<RetryEntry[]>([]);
 
   const refreshHistory = useCallback(async () => {
     historyRef.current = await loadHistory();
-    strugglesRef.current = await loadStruggles();
-    knownRef.current = await loadKnown();
   }, []);
 
   useEffect(() => {
@@ -62,53 +91,108 @@ export function useProblemGenerator(
 
   const generate = useCallback((): Problem => {
     const history = historyRef.current;
-    const struggles = strugglesRef.current;
-    const known = knownRef.current;
     const recentSet = new Set(recentRef.current);
+    const excludedSet = new Set(excludedNumbers);
+    retryQueueRef.current = retryQueueRef.current
+      .map((entry) => ({ ...entry, gap: entry.gap - 1 }))
+      .filter((entry) => {
+        const record = history[entry.key];
+        return record?.lastWrong != null && Date.now() - record.lastWrong <= RETRY_MAX_WINDOW_MS;
+      });
+    const readyRetryKeys = new Set(
+      retryQueueRef.current.filter((entry) => entry.gap <= 0).map((entry) => entry.key),
+    );
 
-    // Build candidate pool
-    const pool: { a: number; b: number; weight: number }[] = [];
+    // Build candidate pool from mode filters first; review priority only ranks inside that pool.
+    const pool: {
+      a: number;
+      b: number;
+      key: string;
+      weight: number;
+      reviewWeight: number;
+      retryWeight: number;
+      isDue: boolean;
+      hasHistory: boolean;
+      isRetryReady: boolean;
+    }[] = [];
 
     if (anchor && anchor >= 1) {
       // Anchor mode: a is fixed, b ranges minNumber–maxNumber
       for (let b = minNumber; b <= maxNumber; b++) {
+        if (excludedSet.has(anchor) || excludedSet.has(b)) continue;
+        if (excludeSquarePairs && operationType === 'multiply' && anchor === b) continue;
         const key = `${anchor}x${b}`;
-        const rkey = `${b}x${anchor}`;
-        let weight = ankiWeight(history[key], struggles.has(key) || struggles.has(rkey), known.has(key) || known.has(rkey));
-        if (recentSet.has(key) || recentSet.has(rkey)) weight = 0;
-        pool.push({ a: anchor, b, weight });
+        const priority = getReviewPriority(history[key]);
+        const hasHistory = !!history[key];
+        let weight = priority.weight;
+        if (recentSet.has(key)) weight = 0;
+        const wrongCount = history[key]?.wrong ?? 0;
+        pool.push({
+          a: anchor,
+          b,
+          key,
+          weight,
+          reviewWeight: priority.weight,
+          retryWeight: Math.max(1, priority.weight) * (1 + wrongCount),
+          isDue: priority.isDue,
+          hasHistory,
+          isRetryReady: readyRetryKeys.has(key),
+        });
       }
     } else {
-      // Free mode: a ranges 1–13, b ranges minNumber–maxNumber
-      for (let a = 1; a <= 13; a++) {
+      // Free mode: both factors range minNumber–13 (capped by maxNumber for b)
+      for (let a = minNumber; a <= 13; a++) {
+        if (excludedSet.has(a)) continue;
         for (let b = minNumber; b <= maxNumber; b++) {
+          if (excludedSet.has(b)) continue;
+          if (excludeSquarePairs && operationType === 'multiply' && a === b) continue;
           const key = `${a}x${b}`;
-          const rkey = `${b}x${a}`;
-          let weight = ankiWeight(history[key], struggles.has(key) || struggles.has(rkey), known.has(key) || known.has(rkey));
-          if (recentSet.has(key) || recentSet.has(rkey)) weight = 0;
-          pool.push({ a, b, weight });
+          const priority = getReviewPriority(history[key]);
+          const hasHistory = !!history[key];
+          let weight = priority.weight;
+          if (recentSet.has(key)) weight = 0;
+          const wrongCount = history[key]?.wrong ?? 0;
+          pool.push({
+            a,
+            b,
+            key,
+            weight,
+            reviewWeight: priority.weight,
+            retryWeight: Math.max(1, priority.weight) * (1 + wrongCount),
+            isDue: priority.isDue,
+            hasHistory,
+            isRetryReady: readyRetryKeys.has(key),
+          });
         }
       }
     }
 
-    // Weighted random selection
-    let totalWeight = pool.reduce((sum, p) => sum + p.weight, 0);
+    // Scale recent queue to pool size to avoid zeroing out small pools.
+    const queueLimit = Math.max(2, Math.min(RECENT_QUEUE_SIZE, Math.floor(pool.length / 2) || 2));
+    while (recentRef.current.length > queueLimit) recentRef.current.shift();
 
-    // If all weights are 0 (tiny pool + all recent), reset weights to 1
-    if (totalWeight <= 0) {
-      for (const p of pool) p.weight = 1;
-      totalWeight = pool.length;
+    const activePool = pool.filter((entry) => entry.weight > 0);
+    const retryPool = pool.filter((entry) => entry.isRetryReady);
+    const duePool = activePool.filter((entry) => entry.isDue);
+    const shouldInjectReview = duePool.length > 0 && Math.random() < REVIEW_INJECTION_RATE;
+    const standardPool = shouldInjectReview
+      ? (duePool.length > 0 ? duePool : activePool)
+      : activePool;
+    const fallbackPool = duePool.length > 0 ? duePool : pool;
+    const chosen = retryPool.length > 0
+      ? pickWeighted(retryPool, (entry) => entry.retryWeight)
+      : pickWeighted(
+          standardPool.length > 0 ? standardPool : fallbackPool,
+          (entry) => (standardPool.length > 0 ? entry.weight : entry.reviewWeight),
+        );
+    if (chosen.isRetryReady) {
+      retryQueueRef.current = retryQueueRef.current.filter((entry) => entry.key !== chosen.key);
     }
-
-    let rand = Math.random() * totalWeight;
-    let chosen = pool[0];
-    for (const entry of pool) {
-      rand -= entry.weight;
-      if (rand <= 0) {
-        chosen = entry;
-        break;
-      }
-    }
+    const resurfacing = chosen.isRetryReady
+      ? 'retry'
+      : chosen.hasHistory && chosen.isDue && shouldInjectReview
+        ? 'review'
+        : undefined;
 
     const product = chosen.a * chosen.b;
 
@@ -117,7 +201,7 @@ export function useProblemGenerator(
     const rkey = `${chosen.b}x${chosen.a}`;
     recentRef.current.push(key);
     if (key !== rkey) recentRef.current.push(rkey);
-    while (recentRef.current.length > RECENT_QUEUE_SIZE) recentRef.current.shift();
+    while (recentRef.current.length > queueLimit) recentRef.current.shift();
 
     const isReverse =
       questionStyle === 'reverse' ||
@@ -142,7 +226,7 @@ export function useProblemGenerator(
           ],
           namespace: 'times-tables-root',
         });
-        return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'root' as const, base, radicand: square };
+        return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'root' as const, base, radicand: square, resurfacing };
       }
 
       // base² = ?
@@ -158,7 +242,7 @@ export function useProblemGenerator(
         ],
         namespace: 'times-tables-sq',
       });
-      return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'square' as const, base };
+      return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'square' as const, base, resurfacing };
     }
 
     // ── Cubes mode ─────────────────────────────────────────
@@ -179,7 +263,7 @@ export function useProblemGenerator(
           ],
           namespace: 'times-tables-cbrt',
         });
-        return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'cuberoot' as const, base, radicand: cube };
+        return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'cuberoot' as const, base, radicand: cube, resurfacing };
       }
 
       // base³ = ?
@@ -196,7 +280,7 @@ export function useProblemGenerator(
         ],
         namespace: 'times-tables-cb',
       });
-      return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'cube' as const, base };
+      return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'cube' as const, base, resurfacing };
     }
 
     // ── Multiply / Divide mode ─────────────────────────────
@@ -219,7 +303,7 @@ export function useProblemGenerator(
         namespace: 'times-tables-div',
       });
 
-      return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'divide' as const, dividend: product, divisor };
+      return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'divide' as const, dividend: product, divisor, resurfacing };
     }
 
     // Standard multiplication
@@ -238,8 +322,8 @@ export function useProblemGenerator(
       namespace: 'times-tables',
     });
 
-    return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'multiply' as const };
-  }, [maxNumber, anchor, minNumber, questionStyle, operationType]);
+    return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'multiply' as const, resurfacing };
+  }, [maxNumber, anchor, minNumber, questionStyle, operationType, excludedNumbers, excludeSquarePairs]);
 
   const reshuffleOptions = useCallback((p: Problem): number[] => {
     const prevIdx = p.options.indexOf(p.answer);
@@ -332,6 +416,15 @@ export function useProblemGenerator(
     async (a: number, b: number, correct: boolean, timeMs: number) => {
       await recordAttempt(a, b, correct, timeMs);
       historyRef.current = await loadHistory();
+      const key = `${a}x${b}`;
+      if (correct) {
+        retryQueueRef.current = retryQueueRef.current.filter((entry) => entry.key !== key);
+        return;
+      }
+      retryQueueRef.current = [
+        ...retryQueueRef.current.filter((entry) => entry.key !== key),
+        { key, gap: randomRetryGap() },
+      ];
     },
     [],
   );

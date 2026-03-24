@@ -9,12 +9,13 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KnownToggle from '../../components/KnownToggle';
 import NumberPad from '../../components/NumberPad';
-import ReferenceOverlay, { SwipeHint } from '../../components/ReferenceOverlay';
-import StruggleToggle from '../../components/StruggleToggle';
+import PeekHint from '../../components/PeekHint';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     DEFAULT_MODE_SETTINGS,
     GameType,
@@ -22,12 +23,8 @@ import {
     ModeSettings,
     ankiWeight,
     loadHistory,
-    loadKnown,
     loadModeSettings,
-    loadStruggles,
     recordByKey,
-    toggleKnown,
-    toggleStruggle,
 } from '../../store/HistoryStore';
 import {
     adjacentSquares,
@@ -54,14 +51,14 @@ interface ArithProblem {
 // Squares: n² for n = 2-25
 // Roots: √(n²) for n = 2-25
 
-function buildPool(history: History, struggles: Set<string>, known: Set<string>) {
+function buildPool(history: History) {
   const pool: { gen: () => ArithProblem; weight: number }[] = [];
 
   for (let n = 2; n <= 25; n++) {
     // Square: "n² = ?"
     const sqKey = `arith:sq${n}`;
     pool.push({
-      weight: ankiWeight(history[sqKey], struggles.has(sqKey), known.has(sqKey)),
+      weight: ankiWeight(history[sqKey]),
       gen: () => ({
         display: `${n}²`,
         answer: n * n,
@@ -74,7 +71,7 @@ function buildPool(history: History, struggles: Set<string>, known: Set<string>)
     // Root: "√(n²) = ?"
     const rtKey = `arith:rt${n * n}`;
     pool.push({
-      weight: ankiWeight(history[rtKey], struggles.has(rtKey), known.has(rtKey)),
+      weight: ankiWeight(history[rtKey]),
       gen: () => ({
         display: `√${n * n}`,
         answer: n,
@@ -125,7 +122,7 @@ const SURVIVAL_START = 3;
 
 export default function ArithmeticGameScreen() {
   const router = useRouter();
-  const { colors, timed, multipleChoice } = useTheme();
+  const { colors, timed, multipleChoice, isWork } = useTheme();
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType = (type || 'arith-survival') as GameType;
 
@@ -133,15 +130,11 @@ export default function ArithmeticGameScreen() {
   const [ready, setReady] = useState(false);
 
   const historyRef = useRef<History>({});
-  const strugglesRef = useRef<Set<string>>(new Set());
-  const knownRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory(), loadStruggles(), loadKnown()]).then(([s, h, str, kn]) => {
+    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
       setSettings(s);
       historyRef.current = h;
-      strugglesRef.current = str;
-      knownRef.current = kn;
       setReady(true);
     });
   }, [gameType]);
@@ -154,9 +147,8 @@ export default function ArithmeticGameScreen() {
   const [correctCount, setCorrectCount] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
-  const [currentStruggling, setCurrentStruggling] = useState(false);
-  const [currentKnown, setCurrentKnown] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
 
   // Survival timer — stored in seconds, counts down
   const [timer, setTimer] = useState(SURVIVAL_START);
@@ -167,9 +159,11 @@ export default function ArithmeticGameScreen() {
   const problemStartRef = useRef(0);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const submittedRef = useRef(false);
+  const graceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceReadyRef = useRef(0);
 
   const generate = useCallback((): ArithProblem => {
-    const pool = buildPool(historyRef.current, strugglesRef.current, knownRef.current);
+    const pool = buildPool(historyRef.current);
     const totalWeight = pool.reduce((s, p) => s + p.weight, 0);
     let rand = Math.random() * totalWeight;
     let chosen = pool[0];
@@ -188,8 +182,6 @@ export default function ArithmeticGameScreen() {
     const p = generate();
     setProblem(p);
     problemStartRef.current = Date.now();
-    setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-    setCurrentKnown(knownRef.current.has(p.historyKey));
 
     if (timed) {
       timerValueRef.current = SURVIVAL_START;
@@ -197,6 +189,7 @@ export default function ArithmeticGameScreen() {
       lastTickRef.current = Date.now();
       pausedRef.current = false;
       submittedRef.current = false;
+      if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
       timerRef.current = setInterval(() => {
         if (pausedRef.current) { lastTickRef.current = Date.now(); return; }
         const now = Date.now();
@@ -206,21 +199,27 @@ export default function ArithmeticGameScreen() {
         if (timerValueRef.current <= 0) {
           clearInterval(timerRef.current!);
           timerRef.current = null;
-          if (submittedRef.current) return;
-          submittedRef.current = true;
-          pausedRef.current = true;
           setTimer(0);
-          setFeedback('wrong');
-          setStreak(0);
-          setAnswered((c) => c + 1);
-          setAwaitingNext(true);
+          graceTimeoutRef.current = setTimeout(() => {
+            if (submittedRef.current) return;
+            submittedRef.current = true;
+            pausedRef.current = true;
+            setFeedback('wrong');
+            setStreak(0);
+            setAnswered((c) => c + 1);
+            setAwaitingNext(true);
+            advanceReadyRef.current = Date.now() + 500;
+          }, 200);
         } else {
           setTimer(timerValueRef.current);
         }
       }, 100);
     }
 
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (graceTimeoutRef.current) clearTimeout(graceTimeoutRef.current);
+    };
   }, [ready]);
 
   const triggerShake = useCallback(() => {
@@ -243,30 +242,35 @@ export default function ArithmeticGameScreen() {
 
       // Stop timer immediately
       pausedRef.current = true;
+      if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
+      hidePeek();
 
-      await recordByKey(problem.historyKey, isCorrect, elapsed);
+      const recordedCorrect = isCorrect && !peekUsed;
+      await recordByKey(problem.historyKey, recordedCorrect, elapsed);
       historyRef.current = await loadHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
         setFeedback('correct');
-        setStreak((s) => s + 1);
-        setCorrectCount((c) => c + 1);
+        if (peekUsed) { setStreak(0); } else { setStreak((s) => s + 1); }
+        if (!peekUsed) setCorrectCount((c) => c + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (timed) {
           timerValueRef.current += 1;
           setTimer(timerValueRef.current);
         }
+        advanceReadyRef.current = Date.now() + 500;
         setAwaitingNext(true);
       } else {
         setFeedback('wrong');
         triggerShake();
         setStreak(0);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        advanceReadyRef.current = Date.now() + 500;
         setAwaitingNext(true);
       }
     },
-    [problem, feedback, gameOver, generate, triggerShake, timed],
+    [problem, feedback, gameOver, generate, triggerShake, timed, hidePeek, peekUsed],
   );
 
   const handleInputSubmit = useCallback(() => {
@@ -274,7 +278,17 @@ export default function ArithmeticGameScreen() {
     if (!isNaN(n)) submit(n);
   }, [input, submit]);
 
+  const handleWebInputKey = useCallback((key: string) => {
+    if (!/^\d$/.test(key)) return;
+    setInput((prev) => prev + key);
+  }, []);
+
+  const handleWebBackspace = useCallback(() => {
+    setInput((prev) => prev.slice(0, -1));
+  }, []);
+
   const advanceNext = useCallback(() => {
+    if (Date.now() < advanceReadyRef.current) return;
     if (settings.problemCount > 0 && answered >= settings.problemCount) {
       setGameOver(true);
       return;
@@ -286,28 +300,11 @@ export default function ArithmeticGameScreen() {
     setFeedback('none');
     setAwaitingNext(false);
     setSelectedOption(null);
-    setCurrentStruggling(strugglesRef.current.has(next.historyKey));
-    setCurrentKnown(knownRef.current.has(next.historyKey));
+    resetPeek();
     submittedRef.current = false;
     pausedRef.current = false;
     lastTickRef.current = Date.now();
-  }, [generate, answered, settings.problemCount]);
-
-  const handleToggleStruggle = useCallback(async () => {
-    if (!problem) return;
-    const nowStruggling = await toggleStruggle(problem.historyKey);
-    setCurrentStruggling(nowStruggling);
-    strugglesRef.current = await loadStruggles();
-    if (nowStruggling) { knownRef.current = await loadKnown(); setCurrentKnown(false); }
-  }, [problem]);
-
-  const handleToggleKnown = useCallback(async () => {
-    if (!problem) return;
-    const nowKnown = await toggleKnown(problem.historyKey);
-    setCurrentKnown(nowKnown);
-    knownRef.current = await loadKnown();
-    if (nowKnown) { strugglesRef.current = await loadStruggles(); setCurrentStruggling(false); }
-  }, [problem]);
+  }, [generate, answered, settings.problemCount, resetPeek]);
 
   const repeatQuestion = useCallback(() => {
     if (problem) {
@@ -318,16 +315,36 @@ export default function ArithmeticGameScreen() {
     setAwaitingNext(false);
     setInput('');
     setSelectedOption(null);
+    resetPeek();
     submittedRef.current = false;
     problemStartRef.current = Date.now();
     pausedRef.current = false;
     lastTickRef.current = Date.now();
-  }, [problem]);
+  }, [problem, resetPeek]);
 
   const feedbackColor =
     feedback === 'correct' ? colors.correct
       : feedback === 'wrong' ? colors.error
         : colors.text;
+
+  const workFormula = problem
+    ? problem.display
+    : '';
+
+  useWebShortcuts(
+    problem && multipleChoice
+      ? problem.options.map(opt =>
+          feedback !== 'none' && opt === problem.answer ? advanceNext
+          : feedback !== 'none' ? null
+          : () => submit(opt))
+      : [],
+    awaitingNext ? advanceNext : undefined,
+    !multipleChoice && !awaitingNext ? handleInputSubmit : undefined,
+    !multipleChoice && !awaitingNext && feedback === 'none' ? handleWebInputKey : undefined,
+    !multipleChoice && !awaitingNext && feedback === 'none' ? handleWebBackspace : undefined,
+    !awaitingNext && feedback === 'none' ? showPeek : undefined,
+    peekVisible ? hidePeek : undefined,
+  );
 
   if (!ready || !problem) {
     return (
@@ -349,12 +366,11 @@ export default function ArithmeticGameScreen() {
       setInput('');
       setFeedback('none');
       setAwaitingNext(false);
+      resetPeek();
       submittedRef.current = false;
       const p = generate();
       setProblem(p);
       problemStartRef.current = Date.now();
-      setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-      setCurrentKnown(knownRef.current.has(p.historyKey));
       if (timed) {
         timerValueRef.current = SURVIVAL_START;
         setTimer(SURVIVAL_START);
@@ -392,8 +408,27 @@ export default function ArithmeticGameScreen() {
   }
 
   return (
-    <ReferenceOverlay>
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
+    <SpreadsheetChrome
+      formula={workFormula}
+      cellRef="D5"
+      options={multipleChoice ? problem.options.map((opt) => ({
+        label: String(opt),
+        onPress: () => submit(opt),
+      })) : undefined}
+      inputValue={!multipleChoice ? input : undefined}
+      onInputChange={!multipleChoice ? (v) => setInput(v) : undefined}
+      onInputSubmit={!multipleChoice ? handleInputSubmit : undefined}
+      feedbackState={feedback === 'none' ? null : feedback}
+      correctAnswer={String(problem.answer)}
+      peekValue={String(problem.answer)}
+      peekVisible={peekVisible && feedback === 'none'}
+      selectedValue={selectedOption !== null ? String(selectedOption) : undefined}
+      onBack={() => router.back()}
+      onNext={awaitingNext ? advanceNext : undefined}
+      onRepeat={awaitingNext ? repeatQuestion : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -414,22 +449,27 @@ export default function ArithmeticGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
-        <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-          <Text style={[styles.problemText, { color: feedbackColor }]}>
-            {problem.display}
+        <View style={styles.problemInlineRow}>
+          <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+            <Text style={[styles.problemText, { color: feedbackColor }]}> 
+              {problem.display}
+            </Text>
+          </Animated.View>
+          <Text
+            style={[
+              styles.inlineReveal,
+              {
+                color: feedback !== 'none'
+                  ? colors.correct
+                  : peekVisible
+                  ? colors.primary
+                  : 'transparent',
+              },
+            ]}
+          >
+            = {String(problem.answer)}
           </Text>
-        </Animated.View>
-        {feedback === 'correct' && (
-          <Text style={[styles.correctHint, { color: colors.correct }]}>= {problem.answer}</Text>
-        )}
-        {feedback === 'wrong' && (
-          <>
-            {selectedOption !== null && (
-              <Text style={[styles.correctHint, { color: colors.error }]}>✗ {selectedOption}</Text>
-            )}
-            <Text style={[styles.correctHint, { color: colors.correct }]}>= {problem.answer}</Text>
-          </>
-        )}
+        </View>
       </View>
 
       {/* Answer area */}
@@ -446,8 +486,8 @@ export default function ArithmeticGameScreen() {
                   feedback === 'wrong' && opt === problem.answer && { borderColor: colors.error, backgroundColor: colors.background },
                 ]}
                 activeOpacity={0.7}
-                onPress={() => submit(opt)}
-                disabled={feedback !== 'none'}
+                onPress={feedback !== 'none' && opt === problem.answer ? advanceNext : () => submit(opt)}
+                disabled={feedback !== 'none' && opt !== problem.answer}
               >
                 <Text style={[styles.mcText, { color: colors.text }]}>{opt}</Text>
               </TouchableOpacity>
@@ -495,16 +535,10 @@ export default function ArithmeticGameScreen() {
       </View>
 
       <View style={styles.footer}>
-        <SwipeHint />
-        {awaitingNext && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StruggleToggle isStruggling={currentStruggling} onToggle={handleToggleStruggle} />
-            <KnownToggle isKnown={currentKnown} onToggle={handleToggleKnown} />
-          </View>
-        )}
+        <PeekHint />
       </View>
+    </SpreadsheetChrome>
     </SafeAreaView>
-    </ReferenceOverlay>
   );
 }
 
@@ -539,8 +573,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
+  problemInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
   problemText: { fontSize: 48, fontWeight: '900', letterSpacing: -1 },
-  correctHint: { ...Font.h2, marginTop: Spacing.sm },
+  inlineReveal: { ...Font.h2, minWidth: 40, textAlign: 'left' },
 
   answerArea: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg },
 

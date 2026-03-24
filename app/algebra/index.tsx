@@ -11,6 +11,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -26,7 +27,7 @@ const WP_TYPE: GameType = 'wordprob-drill';
 
 export default function AlgebraHub() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isWork } = useTheme();
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
@@ -62,11 +63,12 @@ export default function AlgebraHub() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SpreadsheetChrome>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={[styles.back, { color: colors.purple }]}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>Algebra</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Pipeline Metrics' : 'Algebra'}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -176,6 +178,7 @@ export default function AlgebraHub() {
           </View>
         </View>
       </Modal>
+    </SpreadsheetChrome>
     </SafeAreaView>
   );
 }

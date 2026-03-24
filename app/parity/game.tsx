@@ -9,11 +9,12 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KnownToggle from '../../components/KnownToggle';
-import ReferenceOverlay, { SwipeHint } from '../../components/ReferenceOverlay';
-import StruggleToggle from '../../components/StruggleToggle';
+import PeekHint from '../../components/PeekHint';
+import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     generateParityProblem,
     generateSignProblem,
@@ -26,13 +27,9 @@ import {
     GameType,
     History,
     loadHistory,
-    loadKnown,
     loadModeSettings,
-    loadStruggles,
     ModeSettings,
     recordByKey,
-    toggleKnown,
-    toggleStruggle,
 } from '../../store/HistoryStore';
 
 
@@ -41,7 +38,7 @@ type Problem = (ParityProblem | SignProblem) & { correctLabel: string };
 
 export default function ParityGameScreen() {
   const router = useRouter();
-  const { colors, timed } = useTheme();
+  const { colors, timed, isWork } = useTheme();
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType = (type || 'parity-drill') as GameType;
   const isParity = gameType === 'parity-drill';
@@ -50,16 +47,12 @@ export default function ParityGameScreen() {
   const [ready, setReady] = useState(false);
 
   const historyRef = useRef<History>({});
-  const strugglesRef = useRef<Set<string>>(new Set());
-  const knownRef = useRef<Set<string>>(new Set());
   const recentRef = useRef<string[]>([]);
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory(), loadStruggles(), loadKnown()]).then(([s, h, str, kn]) => {
+    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
       setSettings(s);
       historyRef.current = h;
-      strugglesRef.current = str;
-      knownRef.current = kn;
       setReady(true);
     });
   }, [gameType]);
@@ -86,7 +79,7 @@ export default function ParityGameScreen() {
     let best = pool[0];
     let bestW = -1;
     for (const c of pool) {
-      const w = ankiWeight(history[c.historyKey], strugglesRef.current.has(c.historyKey), knownRef.current.has(c.historyKey)) * (0.5 + Math.random());
+      const w = ankiWeight(history[c.historyKey]) * (0.5 + Math.random());
       if (w > bestW) { bestW = w; best = c; }
     }
 
@@ -102,14 +95,15 @@ export default function ParityGameScreen() {
   const [timer, setTimer] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
-  const [currentStruggling, setCurrentStruggling] = useState(false);
-  const [currentKnown, setCurrentKnown] = useState(false);
   const [userAnswer, setUserAnswer] = useState<string | null>(null);
+  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
   const pausedRef = useRef(false);
   const submittedRef = useRef(false);
+  const graceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceReadyRef = useRef(0);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -120,6 +114,7 @@ export default function ParityGameScreen() {
 
   const startProblemTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
     pausedRef.current = false;
     submittedRef.current = false;
     const deadline = Date.now() + settings.timeAttackSeconds * 1000;
@@ -130,14 +125,17 @@ export default function ParityGameScreen() {
       if (remaining <= 0) {
         clearInterval(timerRef.current!);
         timerRef.current = null;
-        if (submittedRef.current) return;
-        submittedRef.current = true;
-        pausedRef.current = true;
         setTimer(0);
-        setFeedback('wrong');
-        setStreak(0);
-        setAnswered((c) => c + 1);
-        setAwaitingNext(true);
+        graceTimeoutRef.current = setTimeout(() => {
+          if (submittedRef.current) return;
+          submittedRef.current = true;
+          pausedRef.current = true;
+          setFeedback('wrong');
+          setStreak(0);
+          setAnswered((c) => c + 1);
+          setAwaitingNext(true);
+          advanceReadyRef.current = Date.now() + 500;
+        }, 200);
       } else {
         setTimer(remaining);
       }
@@ -149,10 +147,11 @@ export default function ParityGameScreen() {
     const p = generate();
     setProblem(p);
     problemStartRef.current = Date.now();
-    setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-    setCurrentKnown(knownRef.current.has(p.historyKey));
     if (timed) startProblemTimer();
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (graceTimeoutRef.current) clearTimeout(graceTimeoutRef.current);
+    };
   }, [ready]);
 
   const triggerShake = useCallback(() => {
@@ -175,15 +174,18 @@ export default function ParityGameScreen() {
 
       pausedRef.current = true;
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (graceTimeoutRef.current) { clearTimeout(graceTimeoutRef.current); graceTimeoutRef.current = null; }
+      hidePeek();
 
-      await recordByKey(problem.historyKey, isCorrect, elapsed);
+      const recordedCorrect = isCorrect && !peekUsed;
+      await recordByKey(problem.historyKey, recordedCorrect, elapsed);
       historyRef.current = await loadHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
         setFeedback('correct');
-        setStreak((s) => s + 1);
-        setCorrectCount((c) => c + 1);
+        if (peekUsed) { setStreak(0); } else { setStreak((s) => s + 1); }
+        if (!peekUsed) setCorrectCount((c) => c + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setFeedback('wrong');
@@ -192,12 +194,14 @@ export default function ParityGameScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
 
+      advanceReadyRef.current = Date.now() + 500;
       setAwaitingNext(true);
     },
-    [problem, feedback, gameOver, answered, settings.problemCount, generate, startProblemTimer, triggerShake, popIn],
+    [problem, feedback, gameOver, answered, settings.problemCount, generate, startProblemTimer, triggerShake, popIn, hidePeek, peekUsed],
   );
 
   const advanceNext = useCallback(() => {
+    if (Date.now() < advanceReadyRef.current) return;
     if (settings.problemCount > 0 && answered >= settings.problemCount) {
       setGameOver(true);
       return;
@@ -208,48 +212,55 @@ export default function ParityGameScreen() {
     setFeedback('none');
     setAwaitingNext(false);
     setUserAnswer(null);
-    setCurrentStruggling(strugglesRef.current.has(next.historyKey));
-    setCurrentKnown(knownRef.current.has(next.historyKey));
+    resetPeek();
     submittedRef.current = false;
     popIn();
     if (timed) startProblemTimer();
-  }, [generate, answered, settings.problemCount, timed, startProblemTimer, popIn]);
-
-  const handleToggleStruggle = useCallback(async () => {
-    if (!problem) return;
-    const nowStruggling = await toggleStruggle(problem.historyKey);
-    setCurrentStruggling(nowStruggling);
-    strugglesRef.current = await loadStruggles();
-    if (nowStruggling) { knownRef.current = await loadKnown(); setCurrentKnown(false); }
-  }, [problem]);
-
-  const handleToggleKnown = useCallback(async () => {
-    if (!problem) return;
-    const nowKnown = await toggleKnown(problem.historyKey);
-    setCurrentKnown(nowKnown);
-    knownRef.current = await loadKnown();
-    if (nowKnown) { strugglesRef.current = await loadStruggles(); setCurrentStruggling(false); }
-  }, [problem]);
+  }, [generate, answered, settings.problemCount, timed, startProblemTimer, popIn, resetPeek]);
 
   const repeatQuestion = useCallback(() => {
     setFeedback('none');
     setAwaitingNext(false);
     setUserAnswer(null);
+    resetPeek();
     submittedRef.current = false;
     problemStartRef.current = Date.now();
     if (timed) startProblemTimer();
-  }, [timed, startProblemTimer]);
+  }, [timed, startProblemTimer, resetPeek]);
 
   const feedbackColor =
     feedback === 'correct' ? colors.correct
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
+  const workFormula = problem
+    ? problem.display
+    : '';
+
   // Button labels
   const btnA = isParity ? 'Even' : 'Pos';
   const btnB = isParity ? 'Odd' : 'Neg';
   const colorA = isParity ? colors.secondary : colors.correct;
   const colorB = isParity ? colors.accent : colors.error;
+
+  useWebShortcuts(
+    problem
+      ? [
+          feedback !== 'none' && problem.correctLabel === btnA ? advanceNext
+          : feedback !== 'none' ? null
+          : () => answer(btnA),
+          feedback !== 'none' && problem.correctLabel === btnB ? advanceNext
+          : feedback !== 'none' ? null
+          : () => answer(btnB),
+        ]
+      : [],
+    awaitingNext ? advanceNext : undefined,
+    undefined,
+    undefined,
+    undefined,
+    !awaitingNext && feedback === 'none' ? showPeek : undefined,
+    peekVisible ? hidePeek : undefined,
+  );
 
   if (!ready || !problem) {
     return (
@@ -270,12 +281,11 @@ export default function ParityGameScreen() {
       setStreak(0);
       setFeedback('none');
       setAwaitingNext(false);
+      resetPeek();
       submittedRef.current = false;
       const p = generate();
       setProblem(p);
       problemStartRef.current = Date.now();
-      setCurrentStruggling(strugglesRef.current.has(p.historyKey));
-      setCurrentKnown(knownRef.current.has(p.historyKey));
       if (timed) startProblemTimer();
     };
     return (
@@ -305,8 +315,24 @@ export default function ParityGameScreen() {
   }
 
   return (
-    <ReferenceOverlay>
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
+    <SpreadsheetChrome
+      formula={workFormula}
+      cellRef="C5"
+      options={[
+        { label: btnA, onPress: () => answer(btnA) },
+        { label: btnB, onPress: () => answer(btnB) },
+      ]}
+      feedbackState={feedback === 'none' ? null : feedback}
+      correctAnswer={problem.correctLabel}
+      peekValue={problem.correctLabel}
+      peekVisible={peekVisible && feedback === 'none'}
+      selectedValue={userAnswer || undefined}
+      onBack={() => router.back()}
+      onNext={awaitingNext ? advanceNext : undefined}
+      onRepeat={awaitingNext ? repeatQuestion : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -330,17 +356,27 @@ export default function ParityGameScreen() {
         <Text style={[styles.modeLabel, { color: colors.muted }]}>
           {isParity ? 'Even or Odd?' : 'Positive or Negative?'}
         </Text>
-        <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
-          <Text style={[styles.problemText, { color: feedbackColor }]}>
-            {problem.display}
+        <View style={styles.problemInlineRow}>
+          <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
+            <Text style={[styles.problemText, { color: feedbackColor }]}> 
+              {problem.display}
+            </Text>
+          </Animated.View>
+          <Text
+            style={[
+              styles.inlineReveal,
+              {
+                color: feedback !== 'none'
+                  ? colors.correct
+                  : peekVisible
+                  ? colors.primary
+                  : 'transparent',
+              },
+            ]}
+          >
+            = {problem.correctLabel}
           </Text>
-        </Animated.View>
-        {feedback === 'wrong' && userAnswer && (
-          <Text style={[styles.correctHint, { color: colors.error }]}>✗ {userAnswer}</Text>
-        )}
-        {feedback !== 'none' && (
-          <Text style={[styles.correctHint, { color: colors.correct }]}>✓ {problem.correctLabel}</Text>
-        )}
+        </View>
       </View>
 
       {/* Answer buttons */}
@@ -353,8 +389,8 @@ export default function ParityGameScreen() {
             feedback === 'wrong' && problem.correctLabel !== btnA && { borderColor: colors.muted },
           ]}
           activeOpacity={0.7}
-          onPress={() => answer(btnA)}
-          disabled={feedback !== 'none'}
+          onPress={feedback !== 'none' && problem.correctLabel === btnA ? advanceNext : () => answer(btnA)}
+          disabled={feedback !== 'none' && problem.correctLabel !== btnA}
         >
           <Text
             style={[
@@ -375,8 +411,8 @@ export default function ParityGameScreen() {
             feedback === 'wrong' && problem.correctLabel !== btnB && { borderColor: colors.muted },
           ]}
           activeOpacity={0.7}
-          onPress={() => answer(btnB)}
-          disabled={feedback !== 'none'}
+          onPress={feedback !== 'none' && problem.correctLabel === btnB ? advanceNext : () => answer(btnB)}
+          disabled={feedback !== 'none' && problem.correctLabel !== btnB}
         >
           <Text
             style={[
@@ -410,16 +446,10 @@ export default function ParityGameScreen() {
       )}
 
       <View style={styles.footer}>
-        <SwipeHint />
-        {awaitingNext && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StruggleToggle isStruggling={currentStruggling} onToggle={handleToggleStruggle} />
-            <KnownToggle isKnown={currentKnown} onToggle={handleToggleKnown} />
-          </View>
-        )}
+        <PeekHint />
       </View>
+    </SpreadsheetChrome>
     </SafeAreaView>
-    </ReferenceOverlay>
   );
 }
 
@@ -453,9 +483,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
+  problemInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
   modeLabel: { ...Font.h3, marginBottom: Spacing.md },
   problemText: { fontSize: 36, fontWeight: '900', textAlign: 'center' },
-  correctHint: { ...Font.h2, marginTop: Spacing.sm },
+  inlineReveal: { ...Font.h2, minWidth: 80, textAlign: 'left' },
 
   btnRow: {
     flexDirection: 'row',
