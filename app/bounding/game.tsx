@@ -13,9 +13,9 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { BoundingProblem, BoundOp, generateBoundingProblem } from '../../data/bounding';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
-import { BoundingProblem, BoundOp, generateBoundingProblem } from '../../data/bounding';
 import {
     ankiWeight,
     DEFAULT_MODE_SETTINGS,
@@ -58,7 +58,7 @@ export default function BoundingGameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [userAnswer, setUserAnswer] = useState<BoundOp | null>(null);
-  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
+  const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const recentRef = useRef<string[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -295,6 +295,7 @@ export default function BoundingGameScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
     <SpreadsheetChrome
+      panHandlers={panHandlers}
       formula={workFormula}
       cellRef="E5"
       options={[
@@ -309,7 +310,7 @@ export default function BoundingGameScreen() {
       onBack={() => router.back()}
       onNext={awaitingNext ? advanceNext : undefined}
       onRepeat={awaitingNext ? repeatQuestion : undefined}
-      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -331,27 +332,25 @@ export default function BoundingGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
-        <View style={styles.problemInlineRow}>
-          <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
-            <Text style={[styles.problemText, { color: feedbackColor }]}> 
-              {problem.display}  vs  {problem.benchmark.toLocaleString()}
-            </Text>
-          </Animated.View>
+        <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
+          <Text style={[styles.problemText, { color: feedbackColor }]}> 
+            {problem.display}  vs  {problem.benchmark.toLocaleString()}
+          </Text>
+        </Animated.View>
+        {(feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
                   ? colors.correct
-                  : peekVisible
-                  ? colors.primary
-                  : 'transparent',
+                  : colors.primary,
               },
             ]}
           >
             = {problem.answer}
           </Text>
-        </View>
+        )}
       </View>
 
       {/* < / > buttons */}
@@ -423,7 +422,7 @@ export default function BoundingGameScreen() {
       )}
 
       <View style={styles.footer}>
-        <PeekHint />
+        <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
       </View>
     </SpreadsheetChrome>
     </SafeAreaView>
@@ -461,14 +460,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
-  problemInlineRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    gap: Spacing.md,
-  },
-  problemText: { fontSize: 32, fontWeight: '900', letterSpacing: -1, textAlign: 'center' },
-  inlineReveal: { ...Font.h2, minWidth: 28, textAlign: 'left' },
+  problemText: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
+  inlineReveal: { fontSize: 27, fontWeight: '900', letterSpacing: -1, textAlign: 'center', marginTop: Spacing.xs },
 
   btnRow: {
     flexDirection: 'row',

@@ -13,6 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
+
+function clamp(raw: string, lo: number, hi: number) {
+  const n = parseInt(raw, 10);
+  return isNaN(n) ? lo : Math.max(lo, Math.min(hi, n));
+}
 import { useTheme } from '../../contexts/ThemeContext';
 import {
     DEFAULT_MODE_SETTINGS,
@@ -39,6 +44,8 @@ export default function ArithmeticHub() {
   useEffect(() => {
     if (showSettings) {
       setDrafts({
+        minNumber: String(settings.minNumber || 2),
+        maxNumber: String(settings.maxNumber || 25),
         problemCount: settings.problemCount ? String(settings.problemCount) : '',
       });
     }
@@ -51,10 +58,14 @@ export default function ArithmeticHub() {
   }
 
   function commitDrafts() {
+    const minN = clamp(drafts.minNumber, 2, 25);
+    const maxN = clamp(drafts.maxNumber, 2, 25);
     const countRaw = parseInt(drafts.problemCount, 10);
     const problemCount = isNaN(countRaw) || countRaw < 1 ? 0 : Math.min(countRaw, 100);
-    patch({ problemCount });
+    patch({ minNumber: Math.min(minN, maxN), maxNumber: Math.max(minN, maxN), problemCount });
     setDrafts({
+      minNumber: String(Math.min(minN, maxN)),
+      maxNumber: String(Math.max(minN, maxN)),
       problemCount: problemCount ? String(problemCount) : '',
     });
   }
@@ -92,17 +103,34 @@ export default function ArithmeticHub() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.infoTitle, { color: colors.text }]}>Problem Types</Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>Squares: 2² – 25²</Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>Roots: √4 – √625</Text>
-        </View>
       </ScrollView>
 
       <Modal visible={showSettings} animationType="fade" transparent>
         <View style={styles.overlay}>
           <View style={[styles.modal, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Settings</Text>
+
+            <View style={styles.modalRow}>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Min number (2–25)</Text>
+              <TextInput
+                style={[styles.modalInput, { backgroundColor: colors.border, color: colors.text }]}
+                keyboardType="number-pad"
+                value={drafts.minNumber ?? '2'}
+                onChangeText={(v) => setDrafts((d) => ({ ...d, minNumber: v }))}
+                maxLength={2}
+              />
+            </View>
+
+            <View style={styles.modalRow}>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Max number (2–25)</Text>
+              <TextInput
+                style={[styles.modalInput, { backgroundColor: colors.border, color: colors.text }]}
+                keyboardType="number-pad"
+                value={drafts.maxNumber ?? '25'}
+                onChangeText={(v) => setDrafts((d) => ({ ...d, maxNumber: v }))}
+                maxLength={2}
+              />
+            </View>
 
             <View style={styles.modalRow}>
               <Text style={[styles.modalLabel, { color: colors.text }]}>Problem count</Text>
@@ -192,13 +220,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   optionLabel: { ...Font.body, fontWeight: '600' },
-  infoCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: Spacing.lg,
-  },
-  infoTitle: { ...Font.body, fontWeight: '700', marginBottom: Spacing.sm },
-  infoLine: { ...Font.caption, marginBottom: 4 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

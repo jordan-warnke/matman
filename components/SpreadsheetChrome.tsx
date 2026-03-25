@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import MathText from './MathText';
 import { useTheme } from '../contexts/ThemeContext';
+import MathText from './MathText';
 
 const COLS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
@@ -80,9 +80,10 @@ export interface WorkModeProps {
 
 interface Props extends WorkModeProps {
   children: React.ReactNode;
+  panHandlers?: Record<string, any>;
 }
 
-export default function SpreadsheetChrome({ children, formula, ...workProps }: Props) {
+export default function SpreadsheetChrome({ children, formula, panHandlers, ...workProps }: Props) {
   const { isWork, colors, isWorkDark, toggleWorkDark } = useTheme();
 
   if (!isWork) return <>{children}</>;
@@ -140,7 +141,7 @@ export default function SpreadsheetChrome({ children, formula, ...workProps }: P
   }, [inputValue, onInputChange, onInputSubmit]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
       {/* Toolbar */}
       <View style={[styles.toolbar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} hitSlop={12}>

@@ -22,20 +22,20 @@ import {
     saveModeSettings,
 } from '../../store/HistoryStore';
 
-const PAR_TYPE: GameType = 'parity-drill';
-const SIGN_TYPE: GameType = 'sign-drill';
+const DS_TYPE: GameType = 'datastats-drill';
+const DI_TYPE: GameType = 'di-drill';
 
-export default function ParityHub() {
+export default function DataStatsHub() {
   const router = useRouter();
   const { colors, isWork } = useTheme();
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsFor, setSettingsFor] = useState<GameType>(PAR_TYPE);
+  const [settingsFor, setSettingsFor] = useState<GameType>(DS_TYPE);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    loadModeSettings(PAR_TYPE).then(setSettings);
+    loadModeSettings(DS_TYPE).then(setSettings);
   }, []);
 
   useEffect(() => {
@@ -50,9 +50,8 @@ export default function ParityHub() {
   async function patch(update: Partial<ModeSettings>) {
     const next = { ...settings, ...update };
     setSettings(next);
-    // Save to both sub-mode keys so they share settings
-    await saveModeSettings(PAR_TYPE, update);
-    await saveModeSettings(SIGN_TYPE, update);
+    await saveModeSettings(DS_TYPE, update);
+    await saveModeSettings(DI_TYPE, update);
   }
 
   function clamp(raw: string, min: number, max: number): number {
@@ -67,50 +66,50 @@ export default function ParityHub() {
     <SpreadsheetChrome>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: colors.primary }]}>←</Text>
+          <Text style={[styles.back, { color: colors.secondary }]}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Variance Report' : 'Parity & Sign'}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Dashboards' : 'Data & Stats'}</Text>
         <View style={{ width: 32 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {/* ── Even/Odd ─────────────────── */}
+        {/* ── Data & Stats ─────────────── */}
         <View style={[styles.modeCard, { borderColor: colors.secondary, backgroundColor: colors.card }]}>
           <TouchableOpacity
             style={styles.modeMain}
             activeOpacity={0.85}
-            onPress={() => router.push({ pathname: '/parity/game', params: { type: PAR_TYPE } })}
+            onPress={() => router.push({ pathname: '/datastats/game', params: { type: DS_TYPE } })}
           >
             <View style={[styles.modeIcon, { backgroundColor: colors.secondary }]}>
-              <Text style={styles.modeEmoji}>±</Text>
+              <Text style={styles.modeEmoji}>📊</Text>
             </View>
-            <Text style={[styles.modeName, { color: colors.text }]}>Even / Odd</Text>
+            <Text style={[styles.modeName, { color: colors.text }]}>Formulas & Concepts</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
-            onPress={() => { setSettingsFor(PAR_TYPE); setShowSettings(true); }}
+            onPress={() => { setSettingsFor(DS_TYPE); setShowSettings(true); }}
           >
             <Feather name="sliders" size={20} color={colors.muted} />
           </TouchableOpacity>
         </View>
 
-        {/* ── Pos/Neg ──────────────────── */}
-        <View style={[styles.modeCard, { borderColor: colors.error, backgroundColor: colors.card }]}>
+        {/* ── Data Insights ────────────── */}
+        <View style={[styles.modeCard, { borderColor: colors.secondaryDark, backgroundColor: colors.card }]}>
           <TouchableOpacity
             style={styles.modeMain}
             activeOpacity={0.85}
-            onPress={() => router.push({ pathname: '/parity/game', params: { type: SIGN_TYPE } })}
+            onPress={() => router.push({ pathname: '/datastats/game', params: { type: DI_TYPE } })}
           >
-            <View style={[styles.modeIcon, { backgroundColor: colors.error }]}>
-              <Text style={styles.modeEmoji}>−</Text>
+            <View style={[styles.modeIcon, { backgroundColor: colors.secondaryDark }]}>
+              <Text style={styles.modeEmoji}>🧩</Text>
             </View>
-            <Text style={[styles.modeName, { color: colors.text }]}>Pos / Neg</Text>
+            <Text style={[styles.modeName, { color: colors.text }]}>Data Insights</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
-            onPress={() => { setSettingsFor(SIGN_TYPE); setShowSettings(true); }}
+            onPress={() => { setSettingsFor(DI_TYPE); setShowSettings(true); }}
           >
             <Feather name="sliders" size={20} color={colors.muted} />
           </TouchableOpacity>
@@ -122,7 +121,7 @@ export default function ParityHub() {
         <View style={styles.overlay}>
           <View style={[styles.modal, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {settingsFor === PAR_TYPE ? 'Even/Odd' : 'Pos/Neg'} Settings
+              {settingsFor === DS_TYPE ? 'Formulas' : 'Data Insights'} Settings
             </Text>
 
             <View style={styles.modalRow}>
@@ -161,7 +160,7 @@ export default function ParityHub() {
             </View>
 
             <TouchableOpacity
-              style={[styles.doneBtn, { backgroundColor: colors.primary, borderBottomColor: colors.primaryDark }]}
+              style={[styles.doneBtn, { backgroundColor: colors.secondary, borderBottomColor: colors.secondaryDark }]}
               activeOpacity={0.85}
               onPress={() => setShowSettings(false)}
             >
@@ -218,18 +217,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
     borderLeftWidth: 1,
   },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  optionLabel: { ...Font.body, fontWeight: '600' },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -248,22 +235,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: Spacing.lg,
   },
-  modalLabel: { ...Font.body, fontWeight: '600', flex: 1 },
+  modalLabel: { ...Font.body, flex: 1 },
   modalInput: {
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
     width: 64,
-    textAlign: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    fontSize: 18,
     fontWeight: '700',
-    fontSize: 16,
+    textAlign: 'center',
   },
   doneBtn: {
-    borderRadius: 16,
+    marginTop: Spacing.md,
     paddingVertical: 14,
+    borderRadius: 16,
+    borderBottomWidth: 5,
     alignItems: 'center',
-    marginTop: Spacing.sm,
-    borderBottomWidth: 4,
   },
   doneTxt: { ...Font.h3, color: '#FFF' },
 });

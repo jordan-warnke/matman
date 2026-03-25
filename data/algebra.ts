@@ -16,6 +16,8 @@ export interface AlgebraProblem {
   id: string;
   /** Category label for display */
   category: string;
+  /** Gauntlet group for category filtering */
+  group: 'identities' | 'exponents' | 'quadratics' | 'inequalities';
   /** Expression shown to user (Unicode-formatted) */
   display: string;
   /** Question prompt */
@@ -59,7 +61,7 @@ export function shuffleOptions(p: AlgebraProblem, avoidIdx?: number): AlgebraPro
 
 const diffOfSquares: AlgebraProblem[] = [
   {
-    id: 'ds01', category: 'Difference of Squares',
+    id: 'ds01', category: 'Difference of Squares', group: 'identities',
     display: 'a² − b²',
     question: 'Which factoring is correct?',
     answer: '(a + b)(a − b)',
@@ -68,7 +70,7 @@ const diffOfSquares: AlgebraProblem[] = [
     historyKey: 'alg:ds:identity',
   },
   {
-    id: 'ds02', category: 'Difference of Squares',
+    id: 'ds02', category: 'Difference of Squares', group: 'identities',
     display: 'x² − 49',
     question: 'Factor completely:',
     answer: '(x + 7)(x − 7)',
@@ -77,7 +79,7 @@ const diffOfSquares: AlgebraProblem[] = [
     historyKey: 'alg:ds:x2-49',
   },
   {
-    id: 'ds03', category: 'Difference of Squares',
+    id: 'ds03', category: 'Difference of Squares', group: 'identities',
     display: '9x² − 16',
     question: 'Factor completely:',
     answer: '(3x + 4)(3x − 4)',
@@ -86,7 +88,7 @@ const diffOfSquares: AlgebraProblem[] = [
     historyKey: 'alg:ds:9x2-16',
   },
   {
-    id: 'ds04', category: 'Difference of Squares',
+    id: 'ds04', category: 'Difference of Squares', group: 'identities',
     display: '25 − y²',
     question: 'Factor completely:',
     answer: '(5 + y)(5 − y)',
@@ -95,7 +97,7 @@ const diffOfSquares: AlgebraProblem[] = [
     historyKey: 'alg:ds:25-y2',
   },
   {
-    id: 'ds07', category: 'Difference of Squares',
+    id: 'ds07', category: 'Difference of Squares', group: 'identities',
     display: '4a² − 9b²',
     question: 'Factor completely:',
     answer: '(2a + 3b)(2a − 3b)',
@@ -109,7 +111,7 @@ const diffOfSquares: AlgebraProblem[] = [
 
 const binomialSquares: AlgebraProblem[] = [
   {
-    id: 'bs01', category: 'Binomial Squares',
+    id: 'bs01', category: 'Binomial Squares', group: 'identities',
     display: '(a + b)²',
     question: 'Expand:',
     answer: 'a² + 2ab + b²',
@@ -118,7 +120,7 @@ const binomialSquares: AlgebraProblem[] = [
     historyKey: 'alg:bs:apb-sq',
   },
   {
-    id: 'bs02', category: 'Binomial Squares',
+    id: 'bs02', category: 'Binomial Squares', group: 'identities',
     display: '(a − b)²',
     question: 'Expand:',
     answer: 'a² − 2ab + b²',
@@ -127,7 +129,7 @@ const binomialSquares: AlgebraProblem[] = [
     historyKey: 'alg:bs:amb-sq',
   },
   {
-    id: 'bs03', category: 'Binomial Squares',
+    id: 'bs03', category: 'Binomial Squares', group: 'identities',
     display: 'x² + 6x + 9',
     question: 'Factor:',
     answer: '(x + 3)²',
@@ -136,7 +138,7 @@ const binomialSquares: AlgebraProblem[] = [
     historyKey: 'alg:bs:x2+6x+9',
   },
   {
-    id: 'bs04', category: 'Binomial Squares',
+    id: 'bs04', category: 'Binomial Squares', group: 'identities',
     display: 'x² − 10x + 25',
     question: 'Factor:',
     answer: '(x − 5)²',
@@ -145,7 +147,7 @@ const binomialSquares: AlgebraProblem[] = [
     historyKey: 'alg:bs:x2-10x+25',
   },
   {
-    id: 'bs05', category: 'Binomial Squares',
+    id: 'bs05', category: 'Binomial Squares', group: 'identities',
     display: '4x² + 12x + 9',
     question: 'Factor:',
     answer: '(2x + 3)²',
@@ -154,7 +156,7 @@ const binomialSquares: AlgebraProblem[] = [
     historyKey: 'alg:bs:4x2+12x+9',
   },
   {
-    id: 'bs06', category: 'Binomial Squares',
+    id: 'bs06', category: 'Binomial Squares', group: 'identities',
     display: '(a + b)² − (a − b)²',
     question: 'Simplify:',
     answer: '4ab',
@@ -163,7 +165,7 @@ const binomialSquares: AlgebraProblem[] = [
     historyKey: 'alg:bs:diff-binom',
   },
   {
-    id: 'bs07', category: 'Binomial Squares',
+    id: 'bs07', category: 'Binomial Squares', group: 'identities',
     display: '(a + b)² + (a − b)²',
     question: 'Simplify:',
     answer: '2a² + 2b²',
@@ -172,7 +174,7 @@ const binomialSquares: AlgebraProblem[] = [
     historyKey: 'alg:bs:sum-binom',
   },
   {
-    id: 'bs10', category: 'Binomial Squares',
+    id: 'bs10', category: 'Binomial Squares', group: 'identities',
     display: 'x² + 14x + 49',
     question: 'Factor:',
     answer: '(x + 7)²',
@@ -186,7 +188,7 @@ const binomialSquares: AlgebraProblem[] = [
 
 const exponentRules: AlgebraProblem[] = [
   {
-    id: 'ex01', category: 'Exponent Rules',
+    id: 'ex01', category: 'Exponent Rules', group: 'exponents',
     display: 'xᵃ · xᵇ',
     question: 'Simplify:',
     answer: 'x⁽ᵃ⁺ᵇ⁾',
@@ -195,7 +197,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:mult-same',
   },
   {
-    id: 'ex02', category: 'Exponent Rules',
+    id: 'ex02', category: 'Exponent Rules', group: 'exponents',
     display: 'xᵃ / xᵇ',
     question: 'Simplify:',
     answer: 'x⁽ᵃ⁻ᵇ⁾',
@@ -204,7 +206,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:div-same',
   },
   {
-    id: 'ex03', category: 'Exponent Rules',
+    id: 'ex03', category: 'Exponent Rules', group: 'exponents',
     display: '(xᵃ)ᵇ',
     question: 'Simplify:',
     answer: 'x⁽ᵃᵇ⁾',
@@ -213,7 +215,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:pow-pow',
   },
   {
-    id: 'ex04', category: 'Exponent Rules',
+    id: 'ex04', category: 'Exponent Rules', group: 'exponents',
     display: '(xy)ⁿ',
     question: 'Simplify:',
     answer: 'xⁿyⁿ',
@@ -222,7 +224,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:prod-pow',
   },
   {
-    id: 'ex05', category: 'Exponent Rules',
+    id: 'ex05', category: 'Exponent Rules', group: 'exponents',
     display: 'x⁰',
     question: 'Evaluate (x ≠ 0):',
     answer: '1',
@@ -231,7 +233,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:zero-pow',
   },
   {
-    id: 'ex06', category: 'Exponent Rules',
+    id: 'ex06', category: 'Exponent Rules', group: 'exponents',
     display: 'x⁻ⁿ',
     question: 'Rewrite as a fraction:',
     answer: '1/xⁿ',
@@ -240,7 +242,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:neg-exp',
   },
   {
-    id: 'ex07', category: 'Exponent Rules',
+    id: 'ex07', category: 'Exponent Rules', group: 'exponents',
     display: '(x/y)ⁿ',
     question: 'Simplify:',
     answer: 'xⁿ/yⁿ',
@@ -249,7 +251,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:quot-pow',
   },
   {
-    id: 'ex08', category: 'Exponent Rules',
+    id: 'ex08', category: 'Exponent Rules', group: 'exponents',
     display: '2³ · 2⁵',
     question: 'Simplify:',
     answer: '2⁸',
@@ -258,7 +260,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:2p3-2p5',
   },
   {
-    id: 'ex09', category: 'Exponent Rules',
+    id: 'ex09', category: 'Exponent Rules', group: 'exponents',
     display: '(3²)³',
     question: 'Simplify:',
     answer: '3⁶',
@@ -267,7 +269,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:3sq-cubed',
   },
   {
-    id: 'ex10', category: 'Exponent Rules',
+    id: 'ex10', category: 'Exponent Rules', group: 'exponents',
     display: '5⁴ / 5²',
     question: 'Simplify:',
     answer: '5²',
@@ -276,7 +278,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:5p4-div-5p2',
   },
   {
-    id: 'ex11', category: 'Exponent Rules',
+    id: 'ex11', category: 'Exponent Rules', group: 'exponents',
     display: '(−2)⁴',
     question: 'Evaluate:',
     answer: '16',
@@ -285,7 +287,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:neg2p4',
   },
   {
-    id: 'ex12', category: 'Exponent Rules',
+    id: 'ex12', category: 'Exponent Rules', group: 'exponents',
     display: '−2⁴',
     question: 'Evaluate (note: no parentheses):',
     answer: '−16',
@@ -294,7 +296,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:minus-2p4',
   },
   {
-    id: 'ex13', category: 'Exponent Rules',
+    id: 'ex13', category: 'Exponent Rules', group: 'exponents',
     display: '2ⁿ + 2ⁿ',
     question: 'Simplify:',
     answer: '2ⁿ⁺¹',
@@ -303,7 +305,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:2n-plus-2n',
   },
   {
-    id: 'ex14', category: 'Exponent Rules',
+    id: 'ex14', category: 'Exponent Rules', group: 'exponents',
     display: '3ⁿ + 3ⁿ + 3ⁿ',
     question: 'Simplify:',
     answer: '3ⁿ⁺¹',
@@ -312,7 +314,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:3n-times-3',
   },
   {
-    id: 'ex15', category: 'Exponent Rules',
+    id: 'ex15', category: 'Exponent Rules', group: 'exponents',
     display: '2¹⁰ + 2¹¹ + 2¹²',
     question: 'Simplify:',
     answer: '7 · 2¹⁰',
@@ -321,7 +323,7 @@ const exponentRules: AlgebraProblem[] = [
     historyKey: 'alg:ex:factor-sum',
   },
   {
-    id: 'ex16', category: 'Exponent Rules',
+    id: 'ex16', category: 'Exponent Rules', group: 'exponents',
     display: '√x',
     question: 'Rewrite in exponential form:',
     answer: 'x^(1/2)',
@@ -335,7 +337,7 @@ const exponentRules: AlgebraProblem[] = [
 
 const sumOfSquaresTrap: AlgebraProblem[] = [
   {
-    id: 'ss01', category: 'Sum of Squares Trap',
+    id: 'ss01', category: 'Sum of Squares Trap', group: 'identities',
     display: 'a² + b²',
     question: 'Can this be factored over the reals?',
     answer: 'No — it is irreducible',
@@ -344,7 +346,7 @@ const sumOfSquaresTrap: AlgebraProblem[] = [
     historyKey: 'alg:ss:no-factor',
   },
   {
-    id: 'ss02', category: 'Sum of Squares Trap',
+    id: 'ss02', category: 'Sum of Squares Trap', group: 'identities',
     display: 'x² + 4',
     question: 'Can this be factored over the reals?',
     answer: 'No — irreducible',
@@ -353,7 +355,7 @@ const sumOfSquaresTrap: AlgebraProblem[] = [
     historyKey: 'alg:ss:x2+4',
   },
   {
-    id: 'ss03', category: 'Sum of Squares Trap',
+    id: 'ss03', category: 'Sum of Squares Trap', group: 'identities',
     display: 'a² + 2ab + b²',
     question: 'Factor:',
     answer: '(a + b)²',
@@ -362,7 +364,7 @@ const sumOfSquaresTrap: AlgebraProblem[] = [
     historyKey: 'alg:ss:pst-trap',
   },
   {
-    id: 'ss04', category: 'Sum of Squares Trap',
+    id: 'ss04', category: 'Sum of Squares Trap', group: 'identities',
     display: 'x² + y² = 25, xy = 12',
     question: 'Which identity finds (x + y)²?',
     answer: '(x+y)² = x² + 2xy + y²',
@@ -371,7 +373,7 @@ const sumOfSquaresTrap: AlgebraProblem[] = [
     historyKey: 'alg:ss:system',
   },
   {
-    id: 'ss05', category: 'Sum of Squares Trap',
+    id: 'ss05', category: 'Sum of Squares Trap', group: 'identities',
     display: '9 + y²',
     question: 'Can this be factored over the reals?',
     answer: 'No — sum of squares is irreducible',
@@ -380,7 +382,7 @@ const sumOfSquaresTrap: AlgebraProblem[] = [
     historyKey: 'alg:ss:9+y2',
   },
   {
-    id: 'ss06', category: 'Sum of Squares Trap',
+    id: 'ss06', category: 'Sum of Squares Trap', group: 'identities',
     display: 'a² − 2ab + b²',
     question: 'This is:',
     answer: '(a − b)² — a perfect square trinomial',
@@ -389,7 +391,7 @@ const sumOfSquaresTrap: AlgebraProblem[] = [
     historyKey: 'alg:ss:pst-neg',
   },
   {
-    id: 'ss07', category: 'Sum of Squares Trap',
+    id: 'ss07', category: 'Sum of Squares Trap', group: 'identities',
     display: '(x + y)² − 2xy',
     question: 'Simplify:',
     answer: 'x² + y²',
@@ -398,7 +400,7 @@ const sumOfSquaresTrap: AlgebraProblem[] = [
     historyKey: 'alg:ss:rearrange',
   },
   {
-    id: 'ss08', category: 'Sum of Squares Trap',
+    id: 'ss08', category: 'Sum of Squares Trap', group: 'identities',
     display: '4a² + 9b²',
     question: 'Can this be factored over the reals?',
     answer: 'No — sum of squares doesn\'t factor',
@@ -412,7 +414,7 @@ const sumOfSquaresTrap: AlgebraProblem[] = [
 
 const factoringGrouping: AlgebraProblem[] = [
   {
-    id: 'fg01', category: 'Factoring by Grouping',
+    id: 'fg01', category: 'Factoring by Grouping', group: 'quadratics',
     display: 'ax + ay + bx + by',
     question: 'Factor:',
     answer: '(a + b)(x + y)',
@@ -421,7 +423,7 @@ const factoringGrouping: AlgebraProblem[] = [
     historyKey: 'alg:fg:abxy',
   },
   {
-    id: 'fg02', category: 'Factoring by Grouping',
+    id: 'fg02', category: 'Factoring by Grouping', group: 'quadratics',
     display: 'x³ + x² + x + 1',
     question: 'Factor:',
     answer: '(x² + 1)(x + 1)',
@@ -430,7 +432,7 @@ const factoringGrouping: AlgebraProblem[] = [
     historyKey: 'alg:fg:x3+x2+x+1',
   },
   {
-    id: 'fg05', category: 'Factoring by Grouping',
+    id: 'fg05', category: 'Factoring by Grouping', group: 'quadratics',
     display: 'x² − 5x + 6',
     question: 'Factor:',
     answer: '(x − 2)(x − 3)',
@@ -439,7 +441,7 @@ const factoringGrouping: AlgebraProblem[] = [
     historyKey: 'alg:fg:x2-5x+6',
   },
   {
-    id: 'fg06', category: 'Factoring by Grouping',
+    id: 'fg06', category: 'Factoring by Grouping', group: 'quadratics',
     display: 'x² + 7x + 12',
     question: 'Factor:',
     answer: '(x + 3)(x + 4)',
@@ -453,7 +455,7 @@ const factoringGrouping: AlgebraProblem[] = [
 
 const fractionSplit: AlgebraProblem[] = [
   {
-    id: 'fs01', category: 'Fraction Split',
+    id: 'fs01', category: 'Fraction Split', group: 'exponents',
     display: '(a + b) / c',
     question: 'Which split is valid?',
     answer: 'a/c + b/c',
@@ -462,7 +464,7 @@ const fractionSplit: AlgebraProblem[] = [
     historyKey: 'alg:fs:num-split',
   },
   {
-    id: 'fs02', category: 'Fraction Split',
+    id: 'fs02', category: 'Fraction Split', group: 'exponents',
     display: 'a / (b + c)',
     question: 'Can this be split as a/b + a/c?',
     answer: 'No — denominator can\'t be split',
@@ -471,7 +473,7 @@ const fractionSplit: AlgebraProblem[] = [
     historyKey: 'alg:fs:denom-trap',
   },
   {
-    id: 'fs03', category: 'Fraction Split',
+    id: 'fs03', category: 'Fraction Split', group: 'exponents',
     display: '(3x + 6) / 3',
     question: 'Simplify:',
     answer: 'x + 2',
@@ -480,7 +482,7 @@ const fractionSplit: AlgebraProblem[] = [
     historyKey: 'alg:fs:3x+6-over-3',
   },
   {
-    id: 'fs04', category: 'Fraction Split',
+    id: 'fs04', category: 'Fraction Split', group: 'exponents',
     display: '(x² + x) / x',
     question: 'Simplify (x ≠ 0):',
     answer: 'x + 1',
@@ -489,7 +491,7 @@ const fractionSplit: AlgebraProblem[] = [
     historyKey: 'alg:fs:x2+x-over-x',
   },
   {
-    id: 'fs05', category: 'Fraction Split',
+    id: 'fs05', category: 'Fraction Split', group: 'exponents',
     display: '(2a − 4b) / 2',
     question: 'Simplify:',
     answer: 'a − 2b',
@@ -498,7 +500,7 @@ const fractionSplit: AlgebraProblem[] = [
     historyKey: 'alg:fs:2a-4b-over-2',
   },
   {
-    id: 'fs06', category: 'Fraction Split',
+    id: 'fs06', category: 'Fraction Split', group: 'exponents',
     display: '3 / (x + y)',
     question: 'Can this be split as 3/x + 3/y?',
     answer: 'No — denominator can\'t be split',
@@ -507,7 +509,7 @@ const fractionSplit: AlgebraProblem[] = [
     historyKey: 'alg:fs:3-over-sum',
   },
   {
-    id: 'fs07', category: 'Fraction Split',
+    id: 'fs07', category: 'Fraction Split', group: 'exponents',
     display: '(x³ + x²) / x²',
     question: 'Simplify (x ≠ 0):',
     answer: 'x + 1',
@@ -516,7 +518,7 @@ const fractionSplit: AlgebraProblem[] = [
     historyKey: 'alg:fs:x3+x2-over-x2',
   },
   {
-    id: 'fs08', category: 'Fraction Split',
+    id: 'fs08', category: 'Fraction Split', group: 'exponents',
     display: '(ab + ac) / a',
     question: 'Simplify (a ≠ 0):',
     answer: 'b + c',
@@ -530,7 +532,7 @@ const fractionSplit: AlgebraProblem[] = [
 
 const perfectSquare: AlgebraProblem[] = [
   {
-    id: 'ps01', category: 'Perfect Square Recognition',
+    id: 'ps01', category: 'Perfect Square Recognition', group: 'identities',
     display: 'x² + 8x + 16',
     question: 'Is this a perfect square trinomial?',
     answer: 'Yes — (x + 4)²',
@@ -539,7 +541,7 @@ const perfectSquare: AlgebraProblem[] = [
     historyKey: 'alg:ps:x2+8x+16',
   },
   {
-    id: 'ps02', category: 'Perfect Square Recognition',
+    id: 'ps02', category: 'Perfect Square Recognition', group: 'identities',
     display: 'x² + 6x + 8',
     question: 'Is this a perfect square trinomial?',
     answer: 'No — factors as (x + 2)(x + 4)',
@@ -548,7 +550,7 @@ const perfectSquare: AlgebraProblem[] = [
     historyKey: 'alg:ps:x2+6x+8',
   },
   {
-    id: 'ps03', category: 'Perfect Square Recognition',
+    id: 'ps03', category: 'Perfect Square Recognition', group: 'identities',
     display: '9x² − 12x + 4',
     question: 'Is this a perfect square trinomial?',
     answer: 'Yes — (3x − 2)²',
@@ -557,7 +559,7 @@ const perfectSquare: AlgebraProblem[] = [
     historyKey: 'alg:ps:9x2-12x+4',
   },
   {
-    id: 'ps04', category: 'Perfect Square Recognition',
+    id: 'ps04', category: 'Perfect Square Recognition', group: 'identities',
     display: 'x² − 2x + 1',
     question: 'Factor:',
     answer: '(x − 1)²',
@@ -566,7 +568,7 @@ const perfectSquare: AlgebraProblem[] = [
     historyKey: 'alg:ps:x2-2x+1',
   },
   {
-    id: 'ps05', category: 'Perfect Square Recognition',
+    id: 'ps05', category: 'Perfect Square Recognition', group: 'identities',
     display: '4x² + 12x + 9',
     question: 'Is this a perfect square trinomial?',
     answer: 'Yes — (2x + 3)²',
@@ -575,7 +577,7 @@ const perfectSquare: AlgebraProblem[] = [
     historyKey: 'alg:ps:4x2+12x+9',
   },
   {
-    id: 'ps06', category: 'Perfect Square Recognition',
+    id: 'ps06', category: 'Perfect Square Recognition', group: 'identities',
     display: 'x² + 10x + 24',
     question: 'Is this a perfect square trinomial?',
     answer: 'No — factors as (x + 4)(x + 6)',
@@ -584,7 +586,7 @@ const perfectSquare: AlgebraProblem[] = [
     historyKey: 'alg:ps:x2+10x+24',
   },
   {
-    id: 'ps07', category: 'Perfect Square Recognition',
+    id: 'ps07', category: 'Perfect Square Recognition', group: 'identities',
     display: '25x² − 30x + 9',
     question: 'Is this a perfect square trinomial?',
     answer: 'Yes — (5x − 3)²',
@@ -593,7 +595,7 @@ const perfectSquare: AlgebraProblem[] = [
     historyKey: 'alg:ps:25x2-30x+9',
   },
   {
-    id: 'ps08', category: 'Perfect Square Recognition',
+    id: 'ps08', category: 'Perfect Square Recognition', group: 'identities',
     display: 'x² − 14x + 49',
     question: 'Factor:',
     answer: '(x − 7)²',
@@ -607,7 +609,7 @@ const perfectSquare: AlgebraProblem[] = [
 
 const spotTheIdentity: AlgebraProblem[] = [
   {
-    id: 'si01', category: 'Spot the Identity',
+    id: 'si01', category: 'Spot the Identity', group: 'identities',
     display: '997 × 1003',
     question: 'Which identity does this use?',
     answer: 'Difference of Squares: (1000 − 3)(1000 + 3)',
@@ -616,7 +618,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:997x1003',
   },
   {
-    id: 'si02', category: 'Spot the Identity',
+    id: 'si02', category: 'Spot the Identity', group: 'identities',
     display: '(x − 4)²',
     question: 'Which identity?',
     answer: 'Binomial Square: (a − b)² = a² − 2ab + b²',
@@ -625,7 +627,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:x-4-sq',
   },
   {
-    id: 'si03', category: 'Spot the Identity',
+    id: 'si03', category: 'Spot the Identity', group: 'identities',
     display: '36 − 25',
     question: 'Which identity can evaluate this quickly?',
     answer: 'Difference of Squares: 6² − 5² = (6−5)(6+5)',
@@ -634,7 +636,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:36-25',
   },
   {
-    id: 'si04', category: 'Spot the Identity',
+    id: 'si04', category: 'Spot the Identity', group: 'identities',
     display: 'x⁴ − 1',
     question: 'Factor completely:',
     answer: '(x² − 1)(x² + 1) = (x−1)(x+1)(x²+1)',
@@ -643,7 +645,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:x4-1',
   },
   {
-    id: 'si05', category: 'Spot the Identity',
+    id: 'si05', category: 'Spot the Identity', group: 'identities',
     display: '(2x + 3)(2x − 3)',
     question: 'Which identity?',
     answer: 'Difference of Squares: 4x² − 9',
@@ -652,7 +654,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:2x+3-2x-3',
   },
   {
-    id: 'si06', category: 'Spot the Identity',
+    id: 'si06', category: 'Spot the Identity', group: 'identities',
     display: 'x² + 10x + 25',
     question: 'Which identity?',
     answer: 'Perfect Square: (x + 5)²',
@@ -661,7 +663,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:x2+10x+25',
   },
   {
-    id: 'si07', category: 'Spot the Identity',
+    id: 'si07', category: 'Spot the Identity', group: 'identities',
     display: '49 − x²',
     question: 'Factor:',
     answer: '(7 − x)(7 + x)',
@@ -670,7 +672,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:49-x2',
   },
   {
-    id: 'si08', category: 'Spot the Identity',
+    id: 'si08', category: 'Spot the Identity', group: 'identities',
     display: '101²',
     question: 'Which identity computes this quickly?',
     answer: 'Binomial Square: (100 + 1)² = 10201',
@@ -679,7 +681,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:101sq',
   },
   {
-    id: 'si09', category: 'Spot the Identity',
+    id: 'si09', category: 'Spot the Identity', group: 'identities',
     display: '16x² − 24x + 9',
     question: 'Which identity?',
     answer: 'Perfect Square: (4x − 3)²',
@@ -688,7 +690,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:16x2-24x+9',
   },
   {
-    id: 'si10', category: 'Spot the Identity',
+    id: 'si10', category: 'Spot the Identity', group: 'identities',
     display: '98 × 102',
     question: 'Which identity?',
     answer: 'Difference of Squares: (100 − 2)(100 + 2) = 9996',
@@ -697,7 +699,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:98x102',
   },
   {
-    id: 'si11', category: 'Spot the Identity',
+    id: 'si11', category: 'Spot the Identity', group: 'identities',
     display: 'x² + 4',
     question: 'Can this be factored over the reals?',
     answer: 'No — sum of squares doesn\'t factor',
@@ -706,7 +708,7 @@ const spotTheIdentity: AlgebraProblem[] = [
     historyKey: 'alg:si:x2+4',
   },
   {
-    id: 'si12', category: 'Spot the Identity',
+    id: 'si12', category: 'Spot the Identity', group: 'identities',
     display: '99²',
     question: 'Which identity computes this quickly?',
     answer: 'Binomial Square: (100 − 1)² = 9801',
@@ -720,7 +722,7 @@ const spotTheIdentity: AlgebraProblem[] = [
 
 const absoluteValue: AlgebraProblem[] = [
   {
-    id: 'av01', category: 'Absolute Value',
+    id: 'av01', category: 'Absolute Value', group: 'inequalities',
     display: '|x − 3| = 7',
     question: 'Solutions:',
     answer: 'x = 10 or x = −4',
@@ -729,7 +731,7 @@ const absoluteValue: AlgebraProblem[] = [
     historyKey: 'alg:av:basic',
   },
   {
-    id: 'av02', category: 'Absolute Value',
+    id: 'av02', category: 'Absolute Value', group: 'inequalities',
     display: '|2x + 1| = −5',
     question: 'Solutions:',
     answer: 'No solution — absolute value can\'t be negative',
@@ -738,7 +740,7 @@ const absoluteValue: AlgebraProblem[] = [
     historyKey: 'alg:av:no-solution',
   },
   {
-    id: 'av03', category: 'Absolute Value',
+    id: 'av03', category: 'Absolute Value', group: 'inequalities',
     display: '|x| = |y|',
     question: 'This means:',
     answer: 'x = y or x = −y',
@@ -747,7 +749,7 @@ const absoluteValue: AlgebraProblem[] = [
     historyKey: 'alg:av:equal-abs',
   },
   {
-    id: 'av04', category: 'Absolute Value',
+    id: 'av04', category: 'Absolute Value', group: 'inequalities',
     display: '|x − 5| < 3',
     question: 'Solution set:',
     answer: '2 < x < 8',
@@ -761,7 +763,7 @@ const absoluteValue: AlgebraProblem[] = [
 
 const cubes: AlgebraProblem[] = [
   {
-    id: 'sc01', category: 'Sum & Difference of Cubes',
+    id: 'sc01', category: 'Sum & Difference of Cubes', group: 'identities',
     display: 'a³ + b³',
     question: 'Factor:',
     answer: '(a + b)(a² − ab + b²)',
@@ -770,7 +772,7 @@ const cubes: AlgebraProblem[] = [
     historyKey: 'alg:sc:sum-cubes',
   },
   {
-    id: 'sc02', category: 'Sum & Difference of Cubes',
+    id: 'sc02', category: 'Sum & Difference of Cubes', group: 'identities',
     display: 'a³ − b³',
     question: 'Factor:',
     answer: '(a − b)(a² + ab + b²)',
@@ -779,7 +781,7 @@ const cubes: AlgebraProblem[] = [
     historyKey: 'alg:sc:diff-cubes',
   },
   {
-    id: 'sc03', category: 'Sum & Difference of Cubes',
+    id: 'sc03', category: 'Sum & Difference of Cubes', group: 'identities',
     display: '8x³ + 27',
     question: 'Factor:',
     answer: '(2x + 3)(4x² − 6x + 9)',
@@ -788,7 +790,7 @@ const cubes: AlgebraProblem[] = [
     historyKey: 'alg:sc:8x3+27',
   },
   {
-    id: 'sc04', category: 'Sum & Difference of Cubes',
+    id: 'sc04', category: 'Sum & Difference of Cubes', group: 'identities',
     display: 'x³ − 64',
     question: 'Factor:',
     answer: '(x − 4)(x² + 4x + 16)',
@@ -802,7 +804,7 @@ const cubes: AlgebraProblem[] = [
 
 const discriminant: AlgebraProblem[] = [
   {
-    id: 'qd01', category: 'Quadratic Discriminant',
+    id: 'qd01', category: 'Quadratic Discriminant', group: 'quadratics',
     display: 'ax² + bx + c = 0',
     question: 'The discriminant is:',
     answer: 'b² − 4ac',
@@ -811,7 +813,7 @@ const discriminant: AlgebraProblem[] = [
     historyKey: 'alg:qd:formula',
   },
   {
-    id: 'qd02', category: 'Quadratic Discriminant',
+    id: 'qd02', category: 'Quadratic Discriminant', group: 'quadratics',
     display: 'D = b² − 4ac > 0',
     question: 'The quadratic has:',
     answer: 'Two distinct real roots',
@@ -820,7 +822,7 @@ const discriminant: AlgebraProblem[] = [
     historyKey: 'alg:qd:positive',
   },
   {
-    id: 'qd03', category: 'Quadratic Discriminant',
+    id: 'qd03', category: 'Quadratic Discriminant', group: 'quadratics',
     display: 'x² + 4x + 4 = 0',
     question: 'How many real solutions?',
     answer: 'One (repeated root)',
@@ -829,7 +831,7 @@ const discriminant: AlgebraProblem[] = [
     historyKey: 'alg:qd:zero-disc',
   },
   {
-    id: 'qd04', category: 'Quadratic Discriminant',
+    id: 'qd04', category: 'Quadratic Discriminant', group: 'quadratics',
     display: '2x² + x + 3 = 0',
     question: 'How many real solutions?',
     answer: 'None — D < 0',
@@ -843,7 +845,7 @@ const discriminant: AlgebraProblem[] = [
 
 const algebraicManipulation: AlgebraProblem[] = [
   {
-    id: 'am01', category: 'Algebraic Manipulation',
+    id: 'am01', category: 'Algebraic Manipulation', group: 'quadratics',
     display: 'x + 1/x = k',
     question: 'What is x² + 1/x²?',
     answer: 'k² − 2',
@@ -852,7 +854,7 @@ const algebraicManipulation: AlgebraProblem[] = [
     historyKey: 'alg:am:x+1overx',
   },
   {
-    id: 'am02', category: 'Algebraic Manipulation',
+    id: 'am02', category: 'Algebraic Manipulation', group: 'quadratics',
     display: 'Given (a + b) and (a − b)',
     question: 'How to find ab?',
     answer: '(a+b)² − (a−b)² = 4ab',
@@ -861,7 +863,7 @@ const algebraicManipulation: AlgebraProblem[] = [
     historyKey: 'alg:am:sum-diff',
   },
   {
-    id: 'am03', category: 'Algebraic Manipulation',
+    id: 'am03', category: 'Algebraic Manipulation', group: 'quadratics',
     display: 'x² − y² = 24, x − y = 4',
     question: 'Which identity finds x + y?',
     answer: 'x² − y² = (x−y)(x+y)',
@@ -870,7 +872,7 @@ const algebraicManipulation: AlgebraProblem[] = [
     historyKey: 'alg:am:diff-sq-system',
   },
   {
-    id: 'am04', category: 'Algebraic Manipulation',
+    id: 'am04', category: 'Algebraic Manipulation', group: 'quadratics',
     display: 'If a/b = 3/4',
     question: '(a + b) / (a − b) = ?',
     answer: '−7',
@@ -879,7 +881,7 @@ const algebraicManipulation: AlgebraProblem[] = [
     historyKey: 'alg:am:ratio-manip',
   },
   {
-    id: 'am05', category: 'Algebraic Manipulation',
+    id: 'am05', category: 'Algebraic Manipulation', group: 'quadratics',
     display: 'x(x + 5) = 0',
     question: 'Solutions:',
     answer: 'x = 0 or x = −5',
@@ -893,7 +895,7 @@ const algebraicManipulation: AlgebraProblem[] = [
 
 const functionNotation: AlgebraProblem[] = [
   {
-    id: 'fn01', category: 'Function Notation',
+    id: 'fn01', category: 'Function Notation', group: 'quadratics',
     display: 'f(x) = 2x + 3',
     question: 'f(5) = ?',
     answer: '13',
@@ -902,7 +904,7 @@ const functionNotation: AlgebraProblem[] = [
     historyKey: 'alg:fn:basic-eval',
   },
   {
-    id: 'fn02', category: 'Function Notation',
+    id: 'fn02', category: 'Function Notation', group: 'quadratics',
     display: 'f(x) = x² − 1',
     question: 'f(a + 1) = ?',
     answer: 'a² + 2a',
@@ -911,7 +913,7 @@ const functionNotation: AlgebraProblem[] = [
     historyKey: 'alg:fn:composite-input',
   },
   {
-    id: 'fn03', category: 'Function Notation',
+    id: 'fn03', category: 'Function Notation', group: 'quadratics',
     display: 'f(x) = 3x, g(x) = x + 2',
     question: 'f(g(x)) = ?',
     answer: '3x + 6',
@@ -920,13 +922,221 @@ const functionNotation: AlgebraProblem[] = [
     historyKey: 'alg:fn:composition',
   },
   {
-    id: 'fn04', category: 'Function Notation',
+    id: 'fn04', category: 'Function Notation', group: 'quadratics',
     display: 'f(x) = x² + 1',
     question: 'f(−x) = ?',
     answer: 'x² + 1 (same as f(x))',
     options: ['x² + 1 (same as f(x))', '−x² + 1', '−x² − 1', 'x² − 1', '−(x² + 1)', '1 − x²'],
     hint: 'f(−x) = (−x)² + 1 = x² + 1 = f(x). This means f is an even function.',
     historyKey: 'alg:fn:even-function',
+  },
+];
+
+// ── 14. Inequalities ─────────────────────────────────────
+
+const inequalities: AlgebraProblem[] = [
+  {
+    id: 'iq01', category: 'Inequalities', group: 'inequalities',
+    display: 'x² − 5x + 6 > 0',
+    question: 'What is the solution set?',
+    answer: 'x < 2 or x > 3',
+    options: ['x < 2 or x > 3', '2 < x < 3', 'x > 2', 'x < 3', 'x > 6', 'x ≤ 2 or x ≥ 3'],
+    hint: 'Factor: (x − 2)(x − 3) > 0. Both factors same sign ⇒ x < 2 or x > 3.',
+    historyKey: 'alg:iq:quad-gt',
+  },
+  {
+    id: 'iq02', category: 'Inequalities', group: 'inequalities',
+    display: 'x² − 4x − 5 ≤ 0',
+    question: 'What is the solution set?',
+    answer: '−1 ≤ x ≤ 5',
+    options: ['−1 ≤ x ≤ 5', 'x ≤ −1 or x ≥ 5', '0 ≤ x ≤ 5', '−5 ≤ x ≤ 1', 'x < −1 or x > 5', '−1 < x < 5'],
+    hint: 'Factor: (x − 5)(x + 1) ≤ 0. Product ≤ 0 ⇒ −1 ≤ x ≤ 5.',
+    historyKey: 'alg:iq:quad-leq',
+  },
+  {
+    id: 'iq03', category: 'Inequalities', group: 'inequalities',
+    display: '(x − 1)(x + 3) < 0',
+    question: 'What is the solution set?',
+    answer: '−3 < x < 1',
+    options: ['−3 < x < 1', 'x < −3 or x > 1', '−1 < x < 3', 'x > 1', 'x < −3', '−3 ≤ x ≤ 1'],
+    hint: 'Product < 0 ⇒ factors have opposite signs ⇒ −3 < x < 1.',
+    historyKey: 'alg:iq:factor-lt',
+  },
+  {
+    id: 'iq04', category: 'Inequalities', group: 'inequalities',
+    display: '|2x − 3| > 5',
+    question: 'What is the solution set?',
+    answer: 'x < −1 or x > 4',
+    options: ['x < −1 or x > 4', '−1 < x < 4', 'x > 4', 'x < −1', '−4 < x < 1', 'x ≤ −1 or x ≥ 4'],
+    hint: '|2x − 3| > 5 ⇒ 2x − 3 > 5 or 2x − 3 < −5 ⇒ x > 4 or x < −1.',
+    historyKey: 'alg:iq:abs-gt',
+  },
+  {
+    id: 'iq05', category: 'Inequalities', group: 'inequalities',
+    display: '|x + 2| ≤ 4',
+    question: 'What is the solution set?',
+    answer: '−6 ≤ x ≤ 2',
+    options: ['−6 ≤ x ≤ 2', 'x ≤ −6 or x ≥ 2', '−2 ≤ x ≤ 4', '−4 ≤ x ≤ 2', '−6 < x < 2', 'x ≥ −6'],
+    hint: '|x + 2| ≤ 4 ⇒ −4 ≤ x + 2 ≤ 4 ⇒ −6 ≤ x ≤ 2.',
+    historyKey: 'alg:iq:abs-leq',
+  },
+  {
+    id: 'iq06', category: 'Inequalities', group: 'inequalities',
+    display: '3x − 7 < 2x + 5',
+    question: 'What is the solution set?',
+    answer: 'x < 12',
+    options: ['x < 12', 'x > 12', 'x < 2', 'x > 2', 'x ≤ 12', 'x < −12'],
+    hint: '3x − 2x < 5 + 7 ⇒ x < 12.',
+    historyKey: 'alg:iq:linear',
+  },
+  {
+    id: 'iq07', category: 'Inequalities', group: 'inequalities',
+    display: '−2x + 1 > 7',
+    question: 'What is the solution set?',
+    answer: 'x < −3',
+    options: ['x < −3', 'x > −3', 'x < 3', 'x > 3', 'x ≤ −3', 'x < −4'],
+    hint: '−2x > 6 ⇒ x < −3 (flip inequality when dividing by negative).',
+    historyKey: 'alg:iq:neg-coeff',
+  },
+  {
+    id: 'iq08', category: 'Inequalities', group: 'inequalities',
+    display: 'x/3 + 1 < x/2 − 2',
+    question: 'What is the solution set?',
+    answer: 'x > 18',
+    options: ['x > 18', 'x < 18', 'x > 6', 'x < 6', 'x ≥ 18', 'x > 9'],
+    hint: 'Multiply by 6: 2x + 6 < 3x − 12 ⇒ 18 < x.',
+    historyKey: 'alg:iq:frac-ineq',
+  },
+  {
+    id: 'iq09', category: 'Inequalities', group: 'inequalities',
+    display: 'x² ≥ 16',
+    question: 'What is the solution set?',
+    answer: 'x ≤ −4 or x ≥ 4',
+    options: ['x ≤ −4 or x ≥ 4', 'x ≥ 4', '−4 ≤ x ≤ 4', 'x ≤ −4', 'x > 4', 'x ≥ 16'],
+    hint: 'x² ≥ 16 ⇒ |x| ≥ 4 ⇒ x ≤ −4 or x ≥ 4.',
+    historyKey: 'alg:iq:sq-geq',
+  },
+  {
+    id: 'iq10', category: 'Inequalities', group: 'inequalities',
+    display: '(x + 1)/(x − 2) > 0',
+    question: 'What is the solution set?',
+    answer: 'x < −1 or x > 2',
+    options: ['x < −1 or x > 2', '−1 < x < 2', 'x > 2', 'x > −1', 'x < −1', '−2 < x < 1'],
+    hint: 'Sign chart: both factors same sign ⇒ x < −1 or x > 2. (x ≠ 2)',
+    historyKey: 'alg:iq:rational',
+  },
+  {
+    id: 'iq11', category: 'Inequalities', group: 'inequalities',
+    display: '1/x < 3, x > 0',
+    question: 'What is the solution set?',
+    answer: 'x > 1/3',
+    options: ['x > 1/3', 'x < 1/3', 'x > 3', 'x < 3', '0 < x < 1/3', 'x ≥ 1/3'],
+    hint: 'x > 0, so multiply both sides by x: 1 < 3x ⇒ x > 1/3.',
+    historyKey: 'alg:iq:recip',
+  },
+  {
+    id: 'iq12', category: 'Inequalities', group: 'inequalities',
+    display: 'If −3 < x < 5 and −2 < y < 4',
+    question: 'What is the range of x − y?',
+    answer: '−7 < x − y < 7',
+    options: ['−7 < x − y < 7', '−5 < x − y < 3', '−1 < x − y < 9', '−7 < x − y < 3', '−5 < x − y < 7', '−3 < x − y < 5'],
+    hint: 'x − y range: min(x) − max(y) to max(x) − min(y) = −3 − 4 to 5 − (−2) = −7 to 7.',
+    historyKey: 'alg:iq:range-diff',
+  },
+];
+
+// ── 15. Quadratic Shortcuts ──────────────────────────────
+
+const quadraticShortcuts: AlgebraProblem[] = [
+  {
+    id: 'qs01', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: 'x² − 7x + 12 = 0',
+    question: 'What is the sum of the roots?',
+    answer: '7',
+    options: ['7', '12', '−7', '−12', '3', '4'],
+    hint: 'By Vieta\'s: sum of roots = −(−7)/1 = 7.',
+    historyKey: 'alg:qs:vieta-sum',
+  },
+  {
+    id: 'qs02', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: 'x² − 7x + 12 = 0',
+    question: 'What is the product of the roots?',
+    answer: '12',
+    options: ['12', '7', '−12', '−7', '3', '4'],
+    hint: 'By Vieta\'s: product of roots = 12/1 = 12.',
+    historyKey: 'alg:qs:vieta-prod',
+  },
+  {
+    id: 'qs03', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: '2x² + 5x − 3 = 0',
+    question: 'What is the sum of the roots?',
+    answer: '−5/2',
+    options: ['−5/2', '5/2', '−3/2', '3/2', '−5', '5'],
+    hint: 'Sum of roots = −b/a = −5/2.',
+    historyKey: 'alg:qs:vieta-sum2',
+  },
+  {
+    id: 'qs04', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: '2x² + 5x − 3 = 0',
+    question: 'What is the product of the roots?',
+    answer: '−3/2',
+    options: ['−3/2', '3/2', '−5/2', '5/2', '−3', '6'],
+    hint: 'Product of roots = c/a = −3/2.',
+    historyKey: 'alg:qs:vieta-prod2',
+  },
+  {
+    id: 'qs05', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: 'x² + 6x + k = 0 has exactly one real root',
+    question: 'What is k?',
+    answer: '9',
+    options: ['9', '6', '3', '36', '12', '−9'],
+    hint: 'One real root ⇒ discriminant = 0: 36 − 4k = 0 ⇒ k = 9.',
+    historyKey: 'alg:qs:disc-zero',
+  },
+  {
+    id: 'qs06', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: '3x² − 2x + 5 = 0',
+    question: 'How many real roots?',
+    answer: '0',
+    options: ['0', '1', '2', '3', 'Cannot determine', 'Infinitely many'],
+    hint: 'Discriminant = 4 − 60 = −56 < 0 ⇒ no real roots.',
+    historyKey: 'alg:qs:disc-neg',
+  },
+  {
+    id: 'qs07', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: 'x² − 10x + 25 = 0',
+    question: 'Factor this equation:',
+    answer: '(x − 5)² = 0',
+    options: ['(x − 5)² = 0', '(x + 5)² = 0', '(x − 5)(x + 5) = 0', '(x − 25)(x − 1) = 0', '(x + 5)(x − 5) = 0', '(x − 10)(x + 25) = 0'],
+    hint: 'x² − 10x + 25 = (x − 5)². Perfect square trinomial.',
+    historyKey: 'alg:qs:perf-sq-quad',
+  },
+  {
+    id: 'qs08', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: 'If r and s are roots of x² − 8x + 15 = 0',
+    question: 'What is r² + s²?',
+    answer: '34',
+    options: ['34', '64', '49', '30', '46', '19'],
+    hint: 'r² + s² = (r + s)² − 2rs = 64 − 30 = 34.',
+    historyKey: 'alg:qs:sum-sq-roots',
+  },
+  {
+    id: 'qs09', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: 'x² + bx + 16 = 0 has two positive integer roots',
+    question: 'How many values of b are possible?',
+    answer: '3',
+    options: ['3', '1', '2', '4', '5', '0'],
+    hint: 'Factor pairs of 16: (1,16), (2,8), (4,4). So b = −17, −10, −8. Three values.',
+    historyKey: 'alg:qs:count-b',
+  },
+  {
+    id: 'qs10', category: 'Quadratic Shortcuts', group: 'quadratics',
+    display: '(x − 3)(x − 5) = −1',
+    question: 'What are the solutions?',
+    answer: 'x = 4',
+    options: ['x = 4', 'x = 3, x = 5', 'x = 2, x = 6', 'x = 4, x = 4', 'x = 1', 'No real solution'],
+    hint: 'Expand: x² − 8x + 15 = −1 ⇒ x² − 8x + 16 = 0 ⇒ (x − 4)² = 0.',
+    historyKey: 'alg:qs:clever-expand',
   },
 ];
 
@@ -946,4 +1156,15 @@ export const ALL_ALGEBRA_PROBLEMS: AlgebraProblem[] = [
   ...discriminant,
   ...algebraicManipulation,
   ...functionNotation,
+  ...inequalities,
+  ...quadraticShortcuts,
 ];
+
+export type GauntletGroup = 'identities' | 'exponents' | 'quadratics' | 'inequalities';
+
+export const GAUNTLET_GROUPS: Record<GauntletGroup, string> = {
+  identities: 'Identities',
+  exponents: 'Exponents',
+  quadratics: 'Quadratics',
+  inequalities: 'Inequalities',
+};

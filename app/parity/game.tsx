@@ -13,14 +13,14 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useInlinePeek } from '../../hooks/useInlinePeek';
-import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     generateParityProblem,
     generateSignProblem,
     ParityProblem,
     SignProblem,
 } from '../../data/parity';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     ankiWeight,
     DEFAULT_MODE_SETTINGS,
@@ -96,7 +96,7 @@ export default function ParityGameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [userAnswer, setUserAnswer] = useState<string | null>(null);
-  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
+  const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
@@ -317,6 +317,7 @@ export default function ParityGameScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
     <SpreadsheetChrome
+      panHandlers={panHandlers}
       formula={workFormula}
       cellRef="C5"
       options={[
@@ -331,7 +332,7 @@ export default function ParityGameScreen() {
       onBack={() => router.back()}
       onNext={awaitingNext ? advanceNext : undefined}
       onRepeat={awaitingNext ? repeatQuestion : undefined}
-      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -356,27 +357,25 @@ export default function ParityGameScreen() {
         <Text style={[styles.modeLabel, { color: colors.muted }]}>
           {isParity ? 'Even or Odd?' : 'Positive or Negative?'}
         </Text>
-        <View style={styles.problemInlineRow}>
-          <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
-            <Text style={[styles.problemText, { color: feedbackColor }]}> 
-              {problem.display}
-            </Text>
-          </Animated.View>
+        <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
+          <Text style={[styles.problemText, { color: feedbackColor }]}> 
+            {problem.display}
+          </Text>
+        </Animated.View>
+        {(feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
                   ? colors.correct
-                  : peekVisible
-                  ? colors.primary
-                  : 'transparent',
+                  : colors.primary,
               },
             ]}
           >
             = {problem.correctLabel}
           </Text>
-        </View>
+        )}
       </View>
 
       {/* Answer buttons */}
@@ -446,7 +445,7 @@ export default function ParityGameScreen() {
       )}
 
       <View style={styles.footer}>
-        <PeekHint />
+        <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
       </View>
     </SpreadsheetChrome>
     </SafeAreaView>
@@ -483,15 +482,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
-  problemInlineRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    gap: Spacing.md,
-  },
   modeLabel: { ...Font.h3, marginBottom: Spacing.md },
-  problemText: { fontSize: 36, fontWeight: '900', textAlign: 'center' },
-  inlineReveal: { ...Font.h2, minWidth: 80, textAlign: 'left' },
+  problemText: { fontSize: 36, fontWeight: '900' },
+  inlineReveal: { fontSize: 31, fontWeight: '900', textAlign: 'center', marginTop: Spacing.xs },
 
   btnRow: {
     flexDirection: 'row',

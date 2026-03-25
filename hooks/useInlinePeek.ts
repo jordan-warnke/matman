@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, PanResponder, PanResponderInstance, Platform } from 'react-native';
 
 const { width: SCREEN_W } = Dimensions.get('window');

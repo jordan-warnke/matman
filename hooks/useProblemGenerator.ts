@@ -39,6 +39,7 @@ const REVIEW_INJECTION_RATE = 0.4;
 interface RetryEntry {
   key: string;
   gap: number;
+  consecutiveCorrect: number;
 }
 
 function randomRetryGap(): number {
@@ -76,6 +77,7 @@ export function useProblemGenerator(
   operationType: 'multiply' | 'squares' | 'cubes' = 'multiply',
   excludedNumbers: number[] = [],
   excludeSquarePairs = false,
+  shuffleOrder = false,
 ) {
   const historyRef = useRef<History>({});
   const recentRef = useRef<string[]>([]);
@@ -309,6 +311,10 @@ export function useProblemGenerator(
     // Standard multiplication
     const answer = product;
 
+    // Optionally swap display order of factors
+    const displayA = shuffleOrder && Math.random() < 0.5 ? chosen.b : chosen.a;
+    const displayB = displayA === chosen.a ? chosen.b : chosen.a;
+
     const options = buildOptions({
       answer,
       count: 3,
@@ -322,8 +328,8 @@ export function useProblemGenerator(
       namespace: 'times-tables',
     });
 
-    return { a: chosen.a, b: chosen.b, answer, options, displayMode: 'multiply' as const, resurfacing };
-  }, [maxNumber, anchor, minNumber, questionStyle, operationType, excludedNumbers, excludeSquarePairs]);
+    return { a: displayA, b: displayB, answer, options, displayMode: 'multiply' as const, resurfacing };
+  }, [maxNumber, anchor, minNumber, questionStyle, operationType, excludedNumbers, excludeSquarePairs, shuffleOrder]);
 
   const reshuffleOptions = useCallback((p: Problem): number[] => {
     const prevIdx = p.options.indexOf(p.answer);
@@ -418,12 +424,25 @@ export function useProblemGenerator(
       historyRef.current = await loadHistory();
       const key = `${a}x${b}`;
       if (correct) {
-        retryQueueRef.current = retryQueueRef.current.filter((entry) => entry.key !== key);
+        const entry = retryQueueRef.current.find((e) => e.key === key);
+        if (entry) {
+          if (entry.consecutiveCorrect >= 1) {
+            // Graduated: 2 consecutive correct answers
+            retryQueueRef.current = retryQueueRef.current.filter((e) => e.key !== key);
+          } else {
+            // First correct — re-queue with larger gap
+            retryQueueRef.current = retryQueueRef.current.map((e) =>
+              e.key === key
+                ? { ...e, consecutiveCorrect: e.consecutiveCorrect + 1, gap: e.gap * 2 }
+                : e,
+            );
+          }
+        }
         return;
       }
       retryQueueRef.current = [
         ...retryQueueRef.current.filter((entry) => entry.key !== key),
-        { key, gap: randomRetryGap() },
+        { key, gap: randomRetryGap(), consecutiveCorrect: 0 },
       ];
     },
     [],

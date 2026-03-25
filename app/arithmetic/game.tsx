@@ -51,10 +51,10 @@ interface ArithProblem {
 // Squares: n² for n = 2-25
 // Roots: √(n²) for n = 2-25
 
-function buildPool(history: History) {
+function buildPool(history: History, minN = 2, maxN = 25) {
   const pool: { gen: () => ArithProblem; weight: number }[] = [];
 
-  for (let n = 2; n <= 25; n++) {
+  for (let n = minN; n <= maxN; n++) {
     // Square: "n² = ?"
     const sqKey = `arith:sq${n}`;
     pool.push({
@@ -148,7 +148,7 @@ export default function ArithmeticGameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
+  const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
   // Survival timer — stored in seconds, counts down
   const [timer, setTimer] = useState(SURVIVAL_START);
@@ -163,7 +163,7 @@ export default function ArithmeticGameScreen() {
   const advanceReadyRef = useRef(0);
 
   const generate = useCallback((): ArithProblem => {
-    const pool = buildPool(historyRef.current);
+    const pool = buildPool(historyRef.current, settings.minNumber || 2, settings.maxNumber || 25);
     const totalWeight = pool.reduce((s, p) => s + p.weight, 0);
     let rand = Math.random() * totalWeight;
     let chosen = pool[0];
@@ -410,6 +410,7 @@ export default function ArithmeticGameScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
     <SpreadsheetChrome
+      panHandlers={panHandlers}
       formula={workFormula}
       cellRef="D5"
       options={multipleChoice ? problem.options.map((opt) => ({
@@ -427,7 +428,7 @@ export default function ArithmeticGameScreen() {
       onBack={() => router.back()}
       onNext={awaitingNext ? advanceNext : undefined}
       onRepeat={awaitingNext ? repeatQuestion : undefined}
-      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -449,27 +450,25 @@ export default function ArithmeticGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
-        <View style={styles.problemInlineRow}>
-          <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-            <Text style={[styles.problemText, { color: feedbackColor }]}> 
-              {problem.display}
-            </Text>
-          </Animated.View>
+        <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+          <Text style={[styles.problemText, { color: feedbackColor }]}> 
+            {problem.display}
+          </Text>
+        </Animated.View>
+        {(feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
                   ? colors.correct
-                  : peekVisible
-                  ? colors.primary
-                  : 'transparent',
+                  : colors.primary,
               },
             ]}
           >
             = {String(problem.answer)}
           </Text>
-        </View>
+        )}
       </View>
 
       {/* Answer area */}
@@ -535,7 +534,7 @@ export default function ArithmeticGameScreen() {
       </View>
 
       <View style={styles.footer}>
-        <PeekHint />
+        <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
       </View>
     </SpreadsheetChrome>
     </SafeAreaView>
@@ -573,14 +572,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
-  problemInlineRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    gap: Spacing.md,
-  },
   problemText: { fontSize: 48, fontWeight: '900', letterSpacing: -1 },
-  inlineReveal: { ...Font.h2, minWidth: 40, textAlign: 'left' },
+  inlineReveal: { fontSize: 41, fontWeight: '900', letterSpacing: -1, textAlign: 'center', marginTop: Spacing.xs },
 
   answerArea: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg },
 

@@ -5,6 +5,7 @@ import {
     Modal,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableOpacity,
@@ -253,6 +254,20 @@ export default function TimesTablesHub() {
                 </View>
               );
             })()}
+
+            {/* ── Exclude numbers ─────────── */}
+            <View style={{ marginBottom: Spacing.lg, gap: Spacing.xs }}>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Shuffle factor order</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 13, color: colors.muted, flex: 1 }}>Show 9×10 and 10×9</Text>
+                <Switch
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#FFF"
+                  value={settings.shuffleOrder ?? false}
+                  onValueChange={(v) => patch({ shuffleOrder: v })}
+                />
+              </View>
+            </View>
 
             {/* ── Exclude numbers ─────────── */}
             <View style={{ marginBottom: Spacing.lg, gap: Spacing.xs }}>

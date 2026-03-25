@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ReferenceBrowser, TableTab } from '../../components/ReferenceOverlay';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ReferenceBrowser, TableTab } from '../../components/ReferenceOverlay';
 
 export default function ReferenceScreen() {
   const router = useRouter();

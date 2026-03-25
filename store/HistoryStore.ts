@@ -143,6 +143,10 @@ export interface ModeSettings {
   timed: boolean;
   excludedNumbers: number[];
   excludeSquarePairs: boolean;
+  shuffleOrder: boolean;
+  maxNumerator: number | null;
+  maxDenominator: number | null;
+  gauntletCategories: string[];
 }
 
 export const DEFAULT_MODE_SETTINGS: ModeSettings = {
@@ -157,12 +161,16 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
   timed: false,
   excludedNumbers: [],
   excludeSquarePairs: false,
+  shuffleOrder: false,
+  maxNumerator: null,
+  maxDenominator: null,
+  gauntletCategories: ['identities', 'exponents', 'quadratics', 'inequalities'],
 };
 
 export function sanitizeModeSettings(settings: ModeSettings): ModeSettings {
-  const maxNumber = clamp(settings.maxNumber, 1, 13);
+  const maxNumber = clamp(settings.maxNumber, 1, 25);
   const minNumber = clamp(settings.minNumber, 1, maxNumber);
-  const anchor = settings.anchor == null ? null : clamp(settings.anchor, 1, 13);
+  const anchor = settings.anchor == null ? null : clamp(settings.anchor, 1, 25);
 
   const excludedNumbers = [...new Set(settings.excludedNumbers ?? [])]
     .filter((n) => Number.isInteger(n) && n >= 1 && n <= 13)
@@ -191,13 +199,15 @@ export type GameType =
   | 'time-attack' | 'free-form'
   | 'fdp-time-attack' | 'fdp-free-form'
   | 'fractions-drill' | 'decimals-drill' | 'percents-drill'
+  | 'cyclicity-drill'
   | 'arith-survival' | 'arith-free-form'
   | 'primes-time-attack' | 'primes-free-form'
   | 'bound-time-attack' | 'bound-free-form'
   | 'parity-drill' | 'sign-drill'
-  | 'algebra-drill' | 'wordprob-drill'
+  | 'algebra-drill' | 'wordprob-drill' | 'gauntlet-drill'
   | 'estimation-drill'
-  | 'datastats-drill';
+  | 'datastats-drill' | 'di-drill'
+  | 'verbal-drill';
 
 // ── helpers ────────────────────────────────────────────────
 

@@ -24,6 +24,7 @@ import {
 
 const ALG_TYPE: GameType = 'algebra-drill';
 const WP_TYPE: GameType = 'wordprob-drill';
+const GAUNTLET_TYPE: GameType = 'gauntlet-drill';
 
 export default function AlgebraHub() {
   const router = useRouter();
@@ -52,6 +53,7 @@ export default function AlgebraHub() {
     setSettings(next);
     await saveModeSettings(ALG_TYPE, update);
     await saveModeSettings(WP_TYPE, update);
+    await saveModeSettings(GAUNTLET_TYPE, update);
   }
 
   function clamp(raw: string, min: number, max: number): number {
@@ -115,22 +117,34 @@ export default function AlgebraHub() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.infoTitle, { color: colors.text }]}>Why This Matters</Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>
-            GMAT algebra questions demand instant pattern recognition. Memorize identities like (a + b)² and difference of squares so you can factor at speed.
-          </Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>
-            Word translation errors account for ~30% of quant mistakes. Drill "less than", "exceeds", and percent traps until they're automatic.
-          </Text>
+        {/* ── Gauntlet ─────────────────── */}
+        <View style={[styles.modeCard, { borderColor: colors.accent, backgroundColor: colors.card }]}>
+          <TouchableOpacity
+            style={styles.modeMain}
+            activeOpacity={0.85}
+            onPress={() => router.push({ pathname: '/algebra/game', params: { type: GAUNTLET_TYPE } })}
+          >
+            <View style={[styles.modeIcon, { backgroundColor: colors.accent }]}>
+              <Text style={styles.modeEmoji}>⚔</Text>
+            </View>
+            <Text style={[styles.modeName, { color: colors.text }]}>Gauntlet</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cogBtn, { borderLeftColor: colors.border }]}
+            hitSlop={8}
+            onPress={() => { setSettingsFor(GAUNTLET_TYPE); setShowSettings(true); }}
+          >
+            <Feather name="sliders" size={20} color={colors.muted} />
+          </TouchableOpacity>
         </View>
+
       </ScrollView>
 
       <Modal visible={showSettings} animationType="fade" transparent>
         <View style={styles.overlay}>
           <View style={[styles.modal, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {settingsFor === ALG_TYPE ? 'Identities' : 'Word Translation'} Settings
+              {settingsFor === ALG_TYPE ? 'Identities' : settingsFor === WP_TYPE ? 'Word Translation' : 'Gauntlet'} Settings
             </Text>
 
             <View style={styles.modalRow}>
@@ -226,13 +240,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
     borderLeftWidth: 1,
   },
-  infoCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: Spacing.lg,
-  },
-  infoTitle: { ...Font.body, fontWeight: '700', marginBottom: Spacing.sm },
-  infoLine: { ...Font.caption, marginBottom: 4 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

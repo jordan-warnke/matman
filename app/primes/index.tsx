@@ -111,15 +111,6 @@ export default function PrimesHub() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.infoTitle, { color: colors.text }]}>Trap Numbers</Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>
-            Watch out for: 51, 57, 87, 91, 111, 119, 133, 161
-          </Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>
-            These composites look prime — they appear more often!
-          </Text>
-        </View>
       </ScrollView>
 
       <Modal visible={showSettings} animationType="fade" transparent>
@@ -247,13 +238,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   optionLabel: { ...Font.body, fontWeight: '600' },
-  infoCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: Spacing.lg,
-  },
-  infoTitle: { ...Font.body, fontWeight: '700', marginBottom: Spacing.sm },
-  infoLine: { ...Font.caption, marginBottom: 4 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

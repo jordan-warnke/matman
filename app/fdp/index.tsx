@@ -50,9 +50,17 @@ const SUB_MODES: SubMode[] = [
   { gameType: 'fractions-drill', emoji: '½', label: 'Fractions', subtitle: '½ → 0.5' },
   { gameType: 'decimals-drill',  emoji: '.5', label: 'Decimals',  subtitle: '0.5 → ½' },
   { gameType: 'percents-drill',  emoji: '%',  label: 'Percents',  subtitle: '½ → 50%' },
+  { gameType: 'cyclicity-drill', emoji: '🔄', label: 'Units Digit', subtitle: '2⁷ → ?' },
 ];
 
-const FIELDS: SettingsFields = { timePerProblem: true, problemCount: true };
+const BASE_FIELDS: SettingsFields = { timePerProblem: true, problemCount: true };
+
+const FDP_FIELDS: Record<string, SettingsFields> = {
+  'fractions-drill': { ...BASE_FIELDS, maxNumerator: { min: 1, max: 12 }, maxDenominator: { min: 2, max: 12 } },
+  'decimals-drill':  { ...BASE_FIELDS, maxNumerator: { min: 1, max: 12 }, maxDenominator: { min: 2, max: 12 } },
+  'percents-drill':  { ...BASE_FIELDS, maxNumerator: { min: 1, max: 12 }, maxDenominator: { min: 2, max: 12 } },
+  'cyclicity-drill': { ...BASE_FIELDS, minNumber: { min: 2, max: 9 }, maxNumber: { min: 2, max: 9 } },
+};
 
 export default function FDPHub() {
   const router = useRouter();
@@ -84,7 +92,10 @@ export default function FDPHub() {
             <TouchableOpacity
               style={styles.modeMain}
               activeOpacity={0.85}
-              onPress={() => router.push({ pathname: '/fdp/game', params: { type: mode.gameType } })}
+              onPress={() => router.push({
+                pathname: mode.gameType === 'cyclicity-drill' ? '/fdp/cyclicity' : '/fdp/game',
+                params: { type: mode.gameType },
+              } as any)}
             >
               <View style={[styles.modeIcon, { backgroundColor: colors.secondary }]}>
                 <Text style={styles.modeEmoji}>{mode.emoji}</Text>
@@ -112,7 +123,7 @@ export default function FDPHub() {
           gameType={settingsMode}
           settings={settings}
           onSettingsChange={setSettings}
-          fields={FIELDS}
+          fields={FDP_FIELDS[settingsMode] ?? BASE_FIELDS}
         />
       )}
     </SpreadsheetChrome>

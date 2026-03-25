@@ -15,8 +15,8 @@ import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
-import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import { Problem, useProblemGenerator } from '../../hooks/useProblemGenerator';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     DEFAULT_MODE_SETTINGS,
     GameType,
@@ -85,6 +85,7 @@ export default function GameScreen() {
     settings.operationType,
     settings.excludedNumbers,
     settings.excludeSquarePairs,
+    settings.shuffleOrder,
   );
 
   // ── game state ──
@@ -98,7 +99,7 @@ export default function GameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
+  const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
   // ── refs for per-problem timer ──
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -421,6 +422,7 @@ export default function GameScreen() {
   return (
           <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
           <SpreadsheetChrome
+            panHandlers={panHandlers}
             formula={workFormula}
             cellRef="D5"
             options={multipleChoice ? problem.options.map((opt) => ({
@@ -442,7 +444,7 @@ export default function GameScreen() {
             onBack={() => router.back()}
             onNext={awaitingNext ? advanceNext : undefined}
             onRepeat={awaitingNext ? repeatQuestion : undefined}
-            onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+            onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
           >
             {/* Header */}
             <View style={styles.header}>
@@ -472,27 +474,25 @@ export default function GameScreen() {
 
             {/* Problem */}
             <View style={styles.problemArea}>
-              <View style={styles.problemInlineRow}>
-                <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-                  <Text style={[styles.problemText, { color: feedbackColor }]}> 
-                    {formatProblemPrompt(problem)}
-                  </Text>
-                </Animated.View>
+              <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+                <Text style={[styles.problemText, { color: feedbackColor }]}> 
+                  {formatProblemPrompt(problem)}
+                </Text>
+              </Animated.View>
+              {(feedback !== 'none' || peekVisible) && (
                 <Text
                   style={[
                     styles.inlineReveal,
                     {
                       color: feedback !== 'none'
                         ? colors.correct
-                        : peekVisible
-                        ? colors.primary
-                        : 'transparent',
+                        : colors.primary,
                     },
                   ]}
                 >
                   = {completionAnswer}
                 </Text>
-              </View>
+              )}
 
               {problem.resurfacing && (
                 <View style={[styles.reviewPill, { backgroundColor: colors.card, borderColor: colors.border }]}> 
@@ -602,7 +602,7 @@ export default function GameScreen() {
             </View>
 
             <View style={styles.footer}>
-              <PeekHint />
+              <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
             </View>
           </SpreadsheetChrome>
           </SafeAreaView>
@@ -641,21 +641,17 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  problemInlineRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    gap: Spacing.md,
+    paddingHorizontal: Spacing.xl,
   },
   problemText: {
     fontSize: 56,
     fontWeight: '800',
   },
   inlineReveal: {
-    ...Font.h2,
-    minWidth: 48,
-    textAlign: 'left',
+    fontSize: 48,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: Spacing.xs,
   },
   reviewPill: {
     marginTop: Spacing.sm,

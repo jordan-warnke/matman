@@ -40,11 +40,11 @@ function SlidersIcon({ color }: { color: string }) {
 const MODE_CONFIGS: Record<string, ModeConfig> = {
   'times-tables': {
     gameType: 'time-attack',
-    fields: { minNumber: { min: 1, max: 13 }, maxNumber: { min: 1, max: 13 }, timePerProblem: true, anchor: true, problemCount: true, operationType: true, questionStyle: true, excludedNumbers: true },
+    fields: { minNumber: { min: 1, max: 13 }, maxNumber: { min: 1, max: 13 }, timePerProblem: true, anchor: true, problemCount: true, operationType: true, questionStyle: true, excludedNumbers: true, shuffleOrder: true },
   },
   arithmetic: {
     gameType: 'arith-survival',
-    fields: { problemCount: true },
+    fields: { minNumber: { min: 2, max: 25 }, maxNumber: { min: 2, max: 25 }, timePerProblem: true, problemCount: true },
   },
   primes: {
     gameType: 'primes-time-attack',
@@ -62,12 +62,20 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
     gameType: 'algebra-drill',
     fields: { timePerProblem: true, problemCount: true },
   },
+  gauntlet: {
+    gameType: 'gauntlet-drill',
+    fields: { timePerProblem: true, problemCount: true, gauntletCategories: true },
+  },
   estimation: {
     gameType: 'estimation-drill',
     fields: { timePerProblem: true, problemCount: true },
   },
   datastats: {
     gameType: 'datastats-drill',
+    fields: { timePerProblem: true, problemCount: true },
+  },
+  verbal: {
+    gameType: 'verbal-drill',
     fields: { timePerProblem: true, problemCount: true },
   },
 };
@@ -253,7 +261,7 @@ export default function MainMenu() {
           <TouchableOpacity
             style={styles.cardMain}
             activeOpacity={0.85}
-            onPress={() => router.push({ pathname: '/datastats/game', params: { type: 'datastats-drill' } })}
+            onPress={() => router.push('/datastats/' as any)}
           >
             <View style={[styles.iconBox, { backgroundColor: colors.secondary }]}>
                 <Text style={styles.iconText}>📊</Text>
@@ -264,6 +272,26 @@ export default function MainMenu() {
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
             onPress={() => setSettingsMode('datastats')}
+          >
+            <SlidersIcon color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.tealDark, borderBottomWidth: 5 }]}>
+          <TouchableOpacity
+            style={styles.cardMain}
+            activeOpacity={0.85}
+            onPress={() => router.push('/verbal/' as any)}
+          >
+            <View style={[styles.iconBox, { backgroundColor: colors.teal }]}>
+                <Text style={styles.iconText}>🗣</Text>
+              </View>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Verbal</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cogBtn, { borderLeftColor: colors.border }]}
+            hitSlop={8}
+            onPress={() => setSettingsMode('verbal')}
           >
             <SlidersIcon color={colors.muted} />
           </TouchableOpacity>

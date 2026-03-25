@@ -13,9 +13,9 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { EstimationProblem, generateEstimation, regenerateOptions } from '../../data/estimation';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
-import { EstimationProblem, generateEstimation, regenerateOptions } from '../../data/estimation';
 import {
     ankiWeight,
     DEFAULT_MODE_SETTINGS,
@@ -76,7 +76,7 @@ export default function EstimationGameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
+  const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
@@ -296,6 +296,7 @@ export default function EstimationGameScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
     <SpreadsheetChrome
+      panHandlers={panHandlers}
       formula={workFormula}
       cellRef="D5"
       options={problem.options.map(opt => ({
@@ -310,7 +311,7 @@ export default function EstimationGameScreen() {
       onBack={() => router.back()}
       onNext={awaitingNext ? advanceNext : undefined}
       onRepeat={awaitingNext ? repeatQuestion : undefined}
-      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -343,21 +344,21 @@ export default function EstimationGameScreen() {
               </Text>
             </Animated.View>
           </View>
+        </View>
+        {(feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
                   ? colors.correct
-                  : peekVisible
-                  ? colors.primary
-                  : 'transparent',
+                  : colors.primary,
               },
             ]}
           >
             = {problem.answer}
           </Text>
-        </View>
+        )}
         {feedback !== 'none' && (
           <Text style={[styles.hintText, { color: colors.muted }]}>
             {problem.hint}
@@ -420,7 +421,7 @@ export default function EstimationGameScreen() {
       </View>
 
       <View style={styles.footer}>
-        <PeekHint />
+        <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
       </View>
     </SpreadsheetChrome>
     </SafeAreaView>
@@ -470,7 +471,7 @@ const styles = StyleSheet.create({
   categoryLabel: { ...Font.caption, marginBottom: Spacing.sm, textAlign: 'center' },
   displayText: { fontSize: 30, fontWeight: '900', textAlign: 'center', marginBottom: Spacing.md },
   questionText: { ...Font.h3, textAlign: 'center', marginBottom: Spacing.sm },
-  inlineReveal: { ...Font.h2, minWidth: 72, textAlign: 'left' },
+  inlineReveal: { fontSize: 26, fontWeight: '900', textAlign: 'center', marginTop: Spacing.xs },
   hintText: { ...Font.body, textAlign: 'center', marginTop: Spacing.md, paddingHorizontal: Spacing.md },
 
   optionsArea: {

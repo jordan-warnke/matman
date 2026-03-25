@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Animated,
@@ -14,9 +14,10 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { ALL_DI_PROBLEMS, DataInsightsProblem, shuffleDIOptions } from '../../data/datainsights';
+import { ALL_DATASTATS_PROBLEMS, DataStatsProblem, shuffleDataStatsOptions } from '../../data/datastats';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
-import { ALL_DATASTATS_PROBLEMS, DataStatsProblem, shuffleDataStatsOptions } from '../../data/datastats';
 import {
     ankiWeight,
     DEFAULT_MODE_SETTINGS,
@@ -28,12 +29,15 @@ import {
     recordByKey,
 } from '../../store/HistoryStore';
 
+type Problem = DataStatsProblem | DataInsightsProblem;
 type Feedback = 'none' | 'correct' | 'wrong';
 
 export default function DataStatsGameScreen() {
   const router = useRouter();
   const { colors, timed, isWork } = useTheme();
-  const gameType: GameType = 'datastats-drill';
+  const { type } = useLocalSearchParams<{ type: string }>();
+  const gameType = (type || 'datastats-drill') as GameType;
+  const isDI = gameType === 'di-drill';
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
@@ -49,15 +53,15 @@ export default function DataStatsGameScreen() {
     });
   }, [gameType]);
 
-  const generate = useCallback((): DataStatsProblem => {
+  const generate = useCallback((): Problem => {
     const history = historyRef.current;
-    const pool = ALL_DATASTATS_PROBLEMS;
+    const pool: Problem[] = isDI ? ALL_DI_PROBLEMS : ALL_DATASTATS_PROBLEMS;
     const recent = new Set(recentRef.current);
 
     const eligible = pool.filter(p => !recent.has(p.historyKey));
     const candidates = eligible.length > 0 ? eligible : pool;
 
-    let best: typeof candidates[0] = candidates[0];
+    let best: Problem = candidates[0];
     let bestW = -1;
     for (const item of candidates) {
       const w = ankiWeight(history[item.historyKey]) * (0.5 + Math.random());
@@ -65,10 +69,12 @@ export default function DataStatsGameScreen() {
     }
 
     recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
-    return shuffleDataStatsOptions(best);
-  }, []);
+    return isDI
+      ? shuffleDIOptions(best as DataInsightsProblem)
+      : shuffleDataStatsOptions(best as DataStatsProblem);
+  }, [isDI]);
 
-  const [problem, setProblem] = useState<DataStatsProblem | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
   const [streak, setStreak] = useState(0);
   const [answered, setAnswered] = useState(0);
@@ -77,7 +83,7 @@ export default function DataStatsGameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
+  const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
@@ -202,9 +208,12 @@ export default function DataStatsGameScreen() {
   const repeatQuestion = useCallback(() => {
     if (problem) {
       const prevIdx = problem.options.indexOf(problem.answer);
-      const original = ALL_DATASTATS_PROBLEMS.find(p => p.historyKey === problem.historyKey);
+      const pool: Problem[] = isDI ? ALL_DI_PROBLEMS : ALL_DATASTATS_PROBLEMS;
+      const original = pool.find(p => p.historyKey === problem.historyKey);
       if (original) {
-        const reshuffled = shuffleDataStatsOptions(original, prevIdx);
+        const reshuffled = isDI
+          ? shuffleDIOptions(original as DataInsightsProblem, prevIdx)
+          : shuffleDataStatsOptions(original as DataStatsProblem, prevIdx);
         setProblem(reshuffled);
       }
     }
@@ -215,7 +224,7 @@ export default function DataStatsGameScreen() {
     submittedRef.current = false;
     problemStartRef.current = Date.now();
     if (timed) startProblemTimer();
-  }, [timed, startProblemTimer, problem, resetPeek]);
+  }, [timed, startProblemTimer, problem, isDI, resetPeek]);
 
   const feedbackColor =
     feedback === 'correct' ? colors.correct
@@ -297,6 +306,7 @@ export default function DataStatsGameScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
     <SpreadsheetChrome
+      panHandlers={panHandlers}
       formula={workFormula}
       cellRef="D5"
       options={problem.options.map(opt => ({
@@ -311,7 +321,7 @@ export default function DataStatsGameScreen() {
       onBack={() => router.back()}
       onNext={awaitingNext ? advanceNext : undefined}
       onRepeat={awaitingNext ? repeatQuestion : undefined}
-      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -342,6 +352,8 @@ export default function DataStatsGameScreen() {
               </Text>
             </Animated.View>
           </View>
+        </View>
+        {(feedback !== 'none' || peekVisible) && (
           <MathText
             text={`= ${problem.answer}`}
             style={[
@@ -349,13 +361,11 @@ export default function DataStatsGameScreen() {
               {
                 color: feedback !== 'none'
                   ? colors.correct
-                  : peekVisible
-                  ? colors.primary
-                  : 'transparent',
+                  : colors.primary,
               },
             ]}
           />
-        </View>
+        )}
       </View>
 
       {/* MC options */}
@@ -417,7 +427,7 @@ export default function DataStatsGameScreen() {
       </View>
 
       <View style={styles.footer}>
-        <PeekHint />
+        <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
       </View>
     </SpreadsheetChrome>
     </SafeAreaView>
@@ -466,7 +476,7 @@ const styles = StyleSheet.create({
   },
   displayText: { fontSize: 30, fontWeight: '900', textAlign: 'center', marginBottom: Spacing.md },
   questionText: { ...Font.h3, textAlign: 'center', marginBottom: Spacing.sm },
-  inlineReveal: { ...Font.h2, minWidth: 72, textAlign: 'left' },
+  inlineReveal: { fontSize: 26, fontWeight: '900', textAlign: 'center', marginTop: Spacing.xs },
 
   optionsArea: {
     paddingHorizontal: Spacing.xl,

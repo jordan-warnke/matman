@@ -18,7 +18,10 @@ function InnerLayout() {
       <Stack.Screen name="bounding/index" />
       <Stack.Screen name="parity/index" />
       <Stack.Screen name="estimation/game" />
+      <Stack.Screen name="datastats/index" />
       <Stack.Screen name="datastats/game" />
+      <Stack.Screen name="verbal/index" />
+      <Stack.Screen name="verbal/game" />
     </Stack>
   );
 }

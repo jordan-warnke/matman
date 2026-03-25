@@ -22,20 +22,18 @@ import {
     saveModeSettings,
 } from '../../store/HistoryStore';
 
-const PAR_TYPE: GameType = 'parity-drill';
-const SIGN_TYPE: GameType = 'sign-drill';
+const VERBAL_TYPE: GameType = 'verbal-drill';
 
-export default function ParityHub() {
+export default function VerbalHub() {
   const router = useRouter();
   const { colors, isWork } = useTheme();
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsFor, setSettingsFor] = useState<GameType>(PAR_TYPE);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    loadModeSettings(PAR_TYPE).then(setSettings);
+    loadModeSettings(VERBAL_TYPE).then(setSettings);
   }, []);
 
   useEffect(() => {
@@ -50,9 +48,7 @@ export default function ParityHub() {
   async function patch(update: Partial<ModeSettings>) {
     const next = { ...settings, ...update };
     setSettings(next);
-    // Save to both sub-mode keys so they share settings
-    await saveModeSettings(PAR_TYPE, update);
-    await saveModeSettings(SIGN_TYPE, update);
+    await saveModeSettings(VERBAL_TYPE, update);
   }
 
   function clamp(raw: string, min: number, max: number): number {
@@ -67,50 +63,71 @@ export default function ParityHub() {
     <SpreadsheetChrome>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: colors.primary }]}>←</Text>
+          <Text style={[styles.back, { color: colors.teal }]}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Variance Report' : 'Parity & Sign'}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Market Research' : 'Verbal'}</Text>
         <View style={{ width: 32 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {/* ── Even/Odd ─────────────────── */}
-        <View style={[styles.modeCard, { borderColor: colors.secondary, backgroundColor: colors.card }]}>
+        {/* ── CR Flaws ─────────────────── */}
+        <View style={[styles.modeCard, { borderColor: colors.teal, backgroundColor: colors.card }]}>
           <TouchableOpacity
             style={styles.modeMain}
             activeOpacity={0.85}
-            onPress={() => router.push({ pathname: '/parity/game', params: { type: PAR_TYPE } })}
+            onPress={() => router.push({ pathname: '/verbal/game', params: { type: VERBAL_TYPE, group: 'cr-flaws' } })}
           >
-            <View style={[styles.modeIcon, { backgroundColor: colors.secondary }]}>
-              <Text style={styles.modeEmoji}>±</Text>
+            <View style={[styles.modeIcon, { backgroundColor: colors.teal }]}>
+              <Text style={styles.modeEmoji}>🔍</Text>
             </View>
-            <Text style={[styles.modeName, { color: colors.text }]}>Even / Odd</Text>
+            <Text style={[styles.modeName, { color: colors.text }]}>CR Flaws</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
-            onPress={() => { setSettingsFor(PAR_TYPE); setShowSettings(true); }}
+            onPress={() => setShowSettings(true)}
           >
             <Feather name="sliders" size={20} color={colors.muted} />
           </TouchableOpacity>
         </View>
 
-        {/* ── Pos/Neg ──────────────────── */}
-        <View style={[styles.modeCard, { borderColor: colors.error, backgroundColor: colors.card }]}>
+        {/* ── Logic Signals ────────────── */}
+        <View style={[styles.modeCard, { borderColor: colors.tealDark, backgroundColor: colors.card }]}>
           <TouchableOpacity
             style={styles.modeMain}
             activeOpacity={0.85}
-            onPress={() => router.push({ pathname: '/parity/game', params: { type: SIGN_TYPE } })}
+            onPress={() => router.push({ pathname: '/verbal/game', params: { type: VERBAL_TYPE, group: 'logic-signals' } })}
           >
-            <View style={[styles.modeIcon, { backgroundColor: colors.error }]}>
-              <Text style={styles.modeEmoji}>−</Text>
+            <View style={[styles.modeIcon, { backgroundColor: colors.tealDark }]}>
+              <Text style={styles.modeEmoji}>🗣</Text>
             </View>
-            <Text style={[styles.modeName, { color: colors.text }]}>Pos / Neg</Text>
+            <Text style={[styles.modeName, { color: colors.text }]}>Logic Signals</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
-            onPress={() => { setSettingsFor(SIGN_TYPE); setShowSettings(true); }}
+            onPress={() => setShowSettings(true)}
+          >
+            <Feather name="sliders" size={20} color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── RC Structure ─────────────── */}
+        <View style={[styles.modeCard, { borderColor: colors.teal, backgroundColor: colors.card }]}>
+          <TouchableOpacity
+            style={styles.modeMain}
+            activeOpacity={0.85}
+            onPress={() => router.push({ pathname: '/verbal/game', params: { type: VERBAL_TYPE, group: 'rc-structure' } })}
+          >
+            <View style={[styles.modeIcon, { backgroundColor: colors.teal }]}>
+              <Text style={styles.modeEmoji}>📖</Text>
+            </View>
+            <Text style={[styles.modeName, { color: colors.text }]}>RC Structure</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cogBtn, { borderLeftColor: colors.border }]}
+            hitSlop={8}
+            onPress={() => setShowSettings(true)}
           >
             <Feather name="sliders" size={20} color={colors.muted} />
           </TouchableOpacity>
@@ -121,9 +138,7 @@ export default function ParityHub() {
       <Modal visible={showSettings} animationType="fade" transparent>
         <View style={styles.overlay}>
           <View style={[styles.modal, { backgroundColor: colors.card }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {settingsFor === PAR_TYPE ? 'Even/Odd' : 'Pos/Neg'} Settings
-            </Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Verbal Settings</Text>
 
             <View style={styles.modalRow}>
               <Text style={[styles.modalLabel, { color: colors.text }]}>Time per problem (s)</Text>
@@ -161,7 +176,7 @@ export default function ParityHub() {
             </View>
 
             <TouchableOpacity
-              style={[styles.doneBtn, { backgroundColor: colors.primary, borderBottomColor: colors.primaryDark }]}
+              style={[styles.doneBtn, { backgroundColor: colors.teal, borderBottomColor: colors.tealDark }]}
               activeOpacity={0.85}
               onPress={() => setShowSettings(false)}
             >
@@ -218,18 +233,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
     borderLeftWidth: 1,
   },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  optionLabel: { ...Font.body, fontWeight: '600' },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -248,22 +251,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: Spacing.lg,
   },
-  modalLabel: { ...Font.body, fontWeight: '600', flex: 1 },
+  modalLabel: { ...Font.body, flex: 1 },
   modalInput: {
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
     width: 64,
-    textAlign: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    fontSize: 18,
     fontWeight: '700',
-    fontSize: 16,
+    textAlign: 'center',
   },
   doneBtn: {
-    borderRadius: 16,
+    marginTop: Spacing.md,
     paddingVertical: 14,
+    borderRadius: 16,
+    borderBottomWidth: 5,
     alignItems: 'center',
-    marginTop: Spacing.sm,
-    borderBottomWidth: 4,
   },
   doneTxt: { ...Font.h3, color: '#FFF' },
 });

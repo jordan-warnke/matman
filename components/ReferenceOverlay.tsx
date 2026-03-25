@@ -5,7 +5,7 @@ import {
     Dimensions,
     Keyboard,
     PanResponder,
-  Platform,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,

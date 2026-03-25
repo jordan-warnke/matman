@@ -91,18 +91,6 @@ export default function BoundingHub() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.infoTitle, { color: colors.text }]}>The "Lazy Math" Engine</Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>
-            Don't calculate — estimate! Is the result above or below the benchmark?
-          </Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>
-            48 × 52 → is it {'<'} 2500 or {'>'} 2500?
-          </Text>
-          <Text style={[styles.infoLine, { color: colors.muted }]}>
-            (50−2)(50+2) = 50² − 4 → always less!
-          </Text>
-        </View>
       </ScrollView>
 
       <Modal visible={showSettings} animationType="fade" transparent>
@@ -214,13 +202,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   optionLabel: { ...Font.body, fontWeight: '600' },
-  infoCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: Spacing.lg,
-  },
-  infoTitle: { ...Font.body, fontWeight: '700', marginBottom: Spacing.sm },
-  infoLine: { ...Font.caption, marginBottom: 4 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

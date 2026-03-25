@@ -14,8 +14,6 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useInlinePeek } from '../../hooks/useInlinePeek';
-import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     checkAnswer,
     FDP_TABLE,
@@ -26,6 +24,8 @@ import {
     getDisplayValue,
     pickFormats,
 } from '../../data/fdp';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     ankiWeight,
     DEFAULT_MODE_SETTINGS,
@@ -83,7 +83,7 @@ export default function FDPGameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
+  const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
@@ -97,8 +97,21 @@ export default function FDPGameScreen() {
   const generate = useCallback((): FDPProblem => {
     const history = historyRef.current;
 
+    // Filter table by numerator / denominator limits
+    const maxNum = settings.maxNumerator;
+    const maxDen = settings.maxDenominator;
+    const filtered = FDP_TABLE.filter((entry) => {
+      const parts = entry.fraction.split('/');
+      const num = parseInt(parts[0], 10);
+      const den = parseInt(parts[1], 10);
+      if (maxNum != null && num > maxNum) return false;
+      if (maxDen != null && den > maxDen) return false;
+      return true;
+    });
+    const table = filtered.length > 0 ? filtered : FDP_TABLE;
+
     // Weighted selection based on error rate
-    const pool = FDP_TABLE.map((entry) => {
+    const pool = table.map((entry) => {
       let source: FDPFormat, target: FDPFormat;
       if (gameType === 'fractions-drill') {
         source = 'fraction'; target = 'decimal';
@@ -136,7 +149,7 @@ export default function FDPGameScreen() {
       options,
       historyKey,
     };
-  }, [gameType]);
+  }, [gameType, settings.maxNumerator, settings.maxDenominator]);
 
   // ── start per-problem timer ──
   const startProblemTimer = useCallback(() => {
@@ -359,6 +372,7 @@ export default function FDPGameScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
     <SpreadsheetChrome
+      panHandlers={panHandlers}
       formula={workFormula}
       cellRef="C5"
       options={multipleChoice ? problem.options.map((opt) => ({
@@ -376,7 +390,7 @@ export default function FDPGameScreen() {
       onBack={() => router.back()}
       onNext={awaitingNext ? advanceNext : undefined}
       onRepeat={awaitingNext ? repeatQuestion : undefined}
-      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -398,32 +412,28 @@ export default function FDPGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
-        <View style={styles.problemInlineRow}>
-          <View style={styles.promptBlock}>
-            <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-              <Text style={[styles.problemText, { color: feedbackColor }]}> 
-                {problem.displayValue}
-              </Text>
-            </Animated.View>
-            <Text style={[styles.questionText, { color: colors.muted }]}> 
-              As a {formatLabel(problem.targetFormat)}?
-            </Text>
-          </View>
+        <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+          <Text style={[styles.problemText, { color: feedbackColor }]}> 
+            {problem.displayValue}
+          </Text>
+        </Animated.View>
+        {(feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
                   ? colors.correct
-                  : peekVisible
-                  ? colors.primary
-                  : 'transparent',
+                  : colors.primary,
               },
             ]}
           >
             = {problem.correctAnswer}
           </Text>
-        </View>
+        )}
+        <Text style={[styles.questionText, { color: colors.muted }]}> 
+          As a {formatLabel(problem.targetFormat)}?
+        </Text>
       </View>
 
       {/* Answer area */}
@@ -490,7 +500,7 @@ export default function FDPGameScreen() {
       </View>
 
       <View style={styles.footer}>
-        <PeekHint />
+        <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
       </View>
     </SpreadsheetChrome>
     </SafeAreaView>
@@ -528,19 +538,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
-  problemInlineRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    gap: Spacing.md,
-  },
   promptBlock: {
     alignItems: 'center',
     flexShrink: 1,
   },
   problemText: { fontSize: 48, fontWeight: '900', letterSpacing: -1 },
   questionText: { ...Font.h3, marginTop: Spacing.sm },
-  inlineReveal: { ...Font.h2, minWidth: 88, textAlign: 'left' },
+  inlineReveal: { fontSize: 41, fontWeight: '900', letterSpacing: -1, textAlign: 'center', marginTop: Spacing.xs },
 
   answerArea: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg },
 

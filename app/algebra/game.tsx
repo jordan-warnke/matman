@@ -14,10 +14,10 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useInlinePeek } from '../../hooks/useInlinePeek';
-import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import { AlgebraProblem, ALL_ALGEBRA_PROBLEMS, shuffleOptions } from '../../data/algebra';
 import { ALL_WORD_PROBLEMS, shuffleWordOptions, WordProblem } from '../../data/wordprob';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     ankiWeight,
     DEFAULT_MODE_SETTINGS,
@@ -46,7 +46,7 @@ export default function AlgebraGameScreen() {
   const { colors, timed, isWork } = useTheme();
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType = (type || 'algebra-drill') as GameType;
-  const isAlgebra = gameType === 'algebra-drill';
+  const isAlgebra = gameType === 'algebra-drill' || gameType === 'gauntlet-drill';
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
@@ -64,7 +64,14 @@ export default function AlgebraGameScreen() {
 
   const generate = useCallback((): Problem => {
     const history = historyRef.current;
-    const pool = isAlgebra ? ALL_ALGEBRA_PROBLEMS : ALL_WORD_PROBLEMS;
+    let pool: (AlgebraProblem | WordProblem)[] = isAlgebra ? ALL_ALGEBRA_PROBLEMS : ALL_WORD_PROBLEMS;
+
+    // Gauntlet: filter by selected category groups
+    if (gameType === 'gauntlet-drill') {
+      const groups = new Set(settings.gauntletCategories ?? ['identities', 'exponents', 'quadratics', 'inequalities']);
+      pool = (pool as AlgebraProblem[]).filter(p => groups.has(p.group));
+    }
+
     const recent = new Set(recentRef.current);
 
     // Filter out recently-seen problems, but keep at least 1
@@ -88,7 +95,7 @@ export default function AlgebraGameScreen() {
       : shuffleWordOptions(best as WordProblem);
 
     return shuffled;
-  }, [isAlgebra]);
+  }, [isAlgebra, gameType, settings.gauntletCategories]);
 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
@@ -99,7 +106,7 @@ export default function AlgebraGameScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const { peekVisible, peekUsed, showPeek, hidePeek, resetPeek, panHandlers } = useInlinePeek();
+  const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
@@ -322,6 +329,7 @@ export default function AlgebraGameScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}> 
     <SpreadsheetChrome
+      panHandlers={panHandlers}
       formula={workFormula}
       cellRef="B5"
       options={problem.options.map((opt) => ({
@@ -336,7 +344,7 @@ export default function AlgebraGameScreen() {
       onBack={() => router.back()}
       onNext={awaitingNext ? advanceNext : undefined}
       onRepeat={awaitingNext ? repeatQuestion : undefined}
-      onPeek={!awaitingNext && feedback === 'none' ? showPeek : undefined}
+      onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -358,15 +366,15 @@ export default function AlgebraGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
-        <View style={styles.problemInlineRow}>
-          <View style={styles.promptBlock}>
-            <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
-              <MathText text={problem.display} style={[styles.displayText, { color: feedbackColor }]} />
-              <Text style={[styles.questionText, { color: colors.text }]}> 
-                {problem.question}
-              </Text>
-            </Animated.View>
-          </View>
+        <View style={styles.promptBlock}>
+          <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
+            <MathText text={problem.display} style={[styles.displayText, { color: feedbackColor }]} />
+            <Text style={[styles.questionText, { color: colors.text }]}> 
+              {problem.question}
+            </Text>
+          </Animated.View>
+        </View>
+        {(feedback !== 'none' || peekVisible) && (
           <MathText
             text={`= ${problem.answer}`}
             style={[
@@ -374,13 +382,11 @@ export default function AlgebraGameScreen() {
               {
                 color: feedback !== 'none'
                   ? colors.correct
-                  : peekVisible
-                  ? colors.primary
-                  : 'transparent',
+                  : colors.primary,
               },
             ]}
           />
-        </View>
+        )}
       </View>
 
       {/* MC options */}
@@ -442,7 +448,7 @@ export default function AlgebraGameScreen() {
       </View>
 
       <View style={styles.footer}>
-        <PeekHint />
+        <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
       </View>
     </SpreadsheetChrome>
     </SafeAreaView>
@@ -492,7 +498,7 @@ const styles = StyleSheet.create({
   categoryLabel: { ...Font.caption, marginBottom: Spacing.sm },
   displayText: { fontSize: 30, fontWeight: '900', textAlign: 'center', marginBottom: Spacing.md },
   questionText: { ...Font.h3, textAlign: 'center', marginBottom: Spacing.sm },
-  inlineReveal: { ...Font.h2, minWidth: 72, textAlign: 'left' },
+  inlineReveal: { fontSize: 26, fontWeight: '900', textAlign: 'center', marginTop: Spacing.sm },
   hintText: { ...Font.body, textAlign: 'center', marginTop: Spacing.md, paddingHorizontal: Spacing.md },
 
   optionsArea: {
