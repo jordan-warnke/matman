@@ -147,6 +147,8 @@ export interface ModeSettings {
   maxNumerator: number | null;
   maxDenominator: number | null;
   gauntletCategories: string[];
+  factoringCategories: string[];
+  operandMode: '3x1' | '2x2' | 'both';
 }
 
 export const DEFAULT_MODE_SETTINGS: ModeSettings = {
@@ -165,6 +167,8 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
   maxNumerator: null,
   maxDenominator: null,
   gauntletCategories: ['identities', 'exponents', 'quadratics', 'inequalities'],
+  factoringCategories: ['diff-squares', 'perfect-sq', 'trinomials', 'gcf', 'leading-coeff', 'cubes'],
+  operandMode: '3x1' as const,
 };
 
 export function sanitizeModeSettings(settings: ModeSettings): ModeSettings {
@@ -204,10 +208,12 @@ export type GameType =
   | 'primes-time-attack' | 'primes-free-form'
   | 'bound-time-attack' | 'bound-free-form'
   | 'parity-drill' | 'sign-drill'
-  | 'algebra-drill' | 'wordprob-drill' | 'gauntlet-drill'
+  | 'algebra-drill' | 'wordprob-drill' | 'gauntlet-drill' | 'factoring-drill'
   | 'estimation-drill'
   | 'datastats-drill' | 'di-drill'
-  | 'verbal-drill';
+  | 'verbal-drill'
+  | 'longdiv-drill'
+  | 'numbersense-drill';
 
 // ── helpers ────────────────────────────────────────────────
 

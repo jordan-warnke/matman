@@ -42,23 +42,30 @@ function buildPool(history: History, maxN: number) {
   const primes: { n: number; weight: number }[] = [];
   const composites: { n: number; weight: number }[] = [];
 
-  for (let n = 2; n <= maxN; n++) {
+  // Skip trivially easy small numbers — start at 11 for a real challenge
+  const minN = 11;
+
+  for (let n = minN; n <= maxN; n++) {
     const key = `prime:${n}`;
     const isTrap = TRAP_NUMBERS.includes(n);
     let w = ankiWeight(history[key]);
-    if (isTrap) w *= 2; // trap numbers always get a boost
+    if (isTrap) w *= 2.5; // trap numbers get a strong boost
 
     if (isPrime(n)) {
+      // Boost primes above 50 — these are the GMAT-relevant ones
+      if (n > 50) w *= 1.5;
       primes.push({ n, weight: w });
     } else {
-      // Down-weight trivially-even composites so odd composites dominate
-      if (n % 2 === 0) w *= 0.25;
+      // Aggressively down-weight obviously composite numbers
+      if (n % 2 === 0) w *= 0.08;        // even → almost never
+      else if (n % 5 === 0) w *= 0.15;    // mult of 5 → rarely
+      else if (n % 3 === 0 && !isTrap) w *= 0.3; // mult of 3 (non-trap) → low
       composites.push({ n, weight: w });
     }
   }
 
-  // Pick from primes ~40% of the time for balanced gameplay
-  return Math.random() < 0.4 ? primes : composites;
+  // Pick from primes ~55% of the time — keeps user diligent
+  return Math.random() < 0.55 ? primes : composites;
 }
 
 export default function PrimesGameScreen() {
@@ -77,7 +84,7 @@ export default function PrimesGameScreen() {
     Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
       setSettings(s);
       historyRef.current = h;
-      maxN.current = s.maxNumber > 13 ? s.maxNumber : 200;
+      maxN.current = s.maxNumber > 13 ? s.maxNumber : 400;
       setReady(true);
     });
   }, [gameType]);

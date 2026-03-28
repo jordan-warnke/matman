@@ -28,20 +28,53 @@ import {
 type Feedback = 'none' | 'correct' | 'wrong';
 
 function formatOptionHint(problem: Problem, option: number): string | null {
-  if (problem.displayMode !== 'multiply') return null;
-
-  const divisors: number[] = [];
-  if (option % problem.a === 0) divisors.push(problem.a);
-  if (problem.b !== problem.a && option % problem.b === 0) divisors.push(problem.b);
-
-  if (divisors.length === 0) {
-    return problem.a === problem.b
-      ? `(not divisible by ${problem.a}!)`
-      : `(not divisible by ${problem.a} or ${problem.b}!)`;
+  if (problem.displayMode === 'multiply') {
+    const divisors: number[] = [];
+    if (option % problem.a === 0) divisors.push(problem.a);
+    if (problem.b !== problem.a && option % problem.b === 0) divisors.push(problem.b);
+    if (divisors.length === 0) {
+      return problem.a === problem.b
+        ? `(not divisible by ${problem.a}!)`
+        : `(not divisible by ${problem.a} or ${problem.b}!)`;
+    }
+    const preferredFactor = divisors.includes(problem.a) ? problem.a : divisors[0];
+    return `(${preferredFactor} × ${option / preferredFactor})`;
   }
 
-  const preferredFactor = divisors.includes(problem.a) ? problem.a : divisors[0];
-  return `(${preferredFactor} × ${option / preferredFactor})`;
+  if (problem.displayMode === 'divide' && problem.dividend && problem.divisor) {
+    if (option !== 0 && problem.dividend % option === 0) {
+      return `(${problem.dividend} ÷ ${problem.dividend / option})`;
+    }
+    return `(${option} doesn't divide evenly into ${problem.dividend})`;
+  }
+
+  if (problem.displayMode === 'square' && problem.base != null) {
+    if (option % problem.base === 0) {
+      return `(${problem.base} × ${option / problem.base})`;
+    }
+    return `(not a multiple of ${problem.base})`;
+  }
+
+  if (problem.displayMode === 'root') {
+    return `(${option}² = ${option * option})`;
+  }
+
+  if (problem.displayMode === 'cube' && problem.base != null) {
+    const sq = problem.base * problem.base;
+    if (option % sq === 0) {
+      return `(${problem.base}² × ${option / sq})`;
+    }
+    if (option % problem.base === 0) {
+      return `(${problem.base} × ${option / problem.base})`;
+    }
+    return `(not a multiple of ${problem.base})`;
+  }
+
+  if (problem.displayMode === 'cuberoot') {
+    return `(${option}³ = ${option ** 3})`;
+  }
+
+  return null;
 }
 
 function formatProblemPrompt(problem: Problem): string {

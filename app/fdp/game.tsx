@@ -24,6 +24,23 @@ import {
     getDisplayValue,
     pickFormats,
 } from '../../data/fdp';
+
+/**
+ * For a wrong FDP option, show what value it actually represents
+ * in the question's source format. e.g. if question is "0.375 → fraction?"
+ * and user picks "1/3", hint: "(= 0.333)" showing what 1/3 is as a decimal.
+ */
+function formatFDPOptionHint(
+  problem: { entry: FDPEntry; sourceFormat: FDPFormat; targetFormat: FDPFormat },
+  option: string,
+): string | null {
+  const entry = FDP_TABLE.find(
+    (e) => getDisplayValue(e, problem.targetFormat) === option,
+  );
+  if (!entry || entry.id === problem.entry.id) return null;
+  const actualSource = getDisplayValue(entry, problem.sourceFormat);
+  return `(= ${actualSource})`;
+}
 import { useInlinePeek } from '../../hooks/useInlinePeek';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
@@ -440,7 +457,9 @@ export default function FDPGameScreen() {
       <View style={styles.answerArea}>
         {multipleChoice ? (
           <View style={styles.mcGrid}>
-            {problem.options.map((opt, i) => (
+            {problem.options.map((opt, i) => {
+              const optionHint = formatFDPOptionHint(problem, opt);
+              return (
               <TouchableOpacity
                 key={`${opt}-${i}`}
                 style={[
@@ -454,8 +473,20 @@ export default function FDPGameScreen() {
                 disabled={feedback !== 'none' && opt !== problem.correctAnswer}
               >
                 <Text style={[styles.mcText, { color: colors.text }]}>{opt}</Text>
+                {optionHint && (
+                  <Text
+                    style={[
+                      styles.mcHintText,
+                      { color: colors.muted, opacity: feedback !== 'none' ? 0.85 : 0 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {optionHint}
+                  </Text>
+                )}
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         ) : (
           <>
@@ -563,6 +594,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 5,
   },
   mcText: { ...Font.h3 },
+  mcHintText: {
+    ...Font.caption,
+    marginTop: 4,
+    opacity: 0.85,
+  },
 
   inputRow: { flexDirection: 'row', gap: Spacing.sm },
   display: {

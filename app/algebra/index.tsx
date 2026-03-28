@@ -25,6 +25,7 @@ import {
 const ALG_TYPE: GameType = 'algebra-drill';
 const WP_TYPE: GameType = 'wordprob-drill';
 const GAUNTLET_TYPE: GameType = 'gauntlet-drill';
+const FACTORING_TYPE: GameType = 'factoring-drill';
 
 export default function AlgebraHub() {
   const router = useRouter();
@@ -54,6 +55,7 @@ export default function AlgebraHub() {
     await saveModeSettings(ALG_TYPE, update);
     await saveModeSettings(WP_TYPE, update);
     await saveModeSettings(GAUNTLET_TYPE, update);
+    await saveModeSettings(FACTORING_TYPE, update);
   }
 
   function clamp(raw: string, min: number, max: number): number {
@@ -138,13 +140,34 @@ export default function AlgebraHub() {
           </TouchableOpacity>
         </View>
 
+        {/* ── Factoring ────────────────── */}
+        <View style={[styles.modeCard, { borderColor: colors.secondary, backgroundColor: colors.card }]}>
+          <TouchableOpacity
+            style={styles.modeMain}
+            activeOpacity={0.85}
+            onPress={() => router.push({ pathname: '/algebra/game', params: { type: FACTORING_TYPE } })}
+          >
+            <View style={[styles.modeIcon, { backgroundColor: colors.secondary }]}>
+              <Text style={styles.modeEmoji}>✂️</Text>
+            </View>
+            <Text style={[styles.modeName, { color: colors.text }]}>Factoring</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cogBtn, { borderLeftColor: colors.border }]}
+            hitSlop={8}
+            onPress={() => { setSettingsFor(FACTORING_TYPE); setShowSettings(true); }}
+          >
+            <Feather name="sliders" size={20} color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
 
       <Modal visible={showSettings} animationType="fade" transparent>
         <View style={styles.overlay}>
           <View style={[styles.modal, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {settingsFor === ALG_TYPE ? 'Identities' : settingsFor === WP_TYPE ? 'Word Translation' : 'Gauntlet'} Settings
+              {settingsFor === ALG_TYPE ? 'Identities' : settingsFor === WP_TYPE ? 'Word Translation' : settingsFor === GAUNTLET_TYPE ? 'Gauntlet' : 'Factoring'} Settings
             </Text>
 
             <View style={styles.modalRow}>

@@ -29,6 +29,15 @@ const GAUNTLET_GROUP_LABELS: Record<string, string> = {
   inequalities: 'Inequalities',
 };
 
+const FACTORING_GROUP_LABELS: Record<string, string> = {
+  'diff-squares': 'Diff. of Squares',
+  'perfect-sq': 'Perfect Sq. Tri.',
+  trinomials: 'Trinomials',
+  gcf: 'GCF',
+  'leading-coeff': 'Leading Coeff.',
+  cubes: 'Sum/Diff Cubes',
+};
+
 export interface SettingsFields {
   maxNumber?: { min: number; max: number };
   minNumber?: { min: number; max: number };
@@ -42,6 +51,8 @@ export interface SettingsFields {
   maxNumerator?: { min: number; max: number };
   maxDenominator?: { min: number; max: number };
   gauntletCategories?: boolean;
+  factoringCategories?: boolean;
+  operandMode?: boolean;
 }
 
 interface Props {
@@ -437,6 +448,72 @@ export default function GameSettingsModal({
                             }}
                           >
                             <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#FFF' : colors.text }}>{label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {fields.factoringCategories && (
+                  <View style={{ gap: Spacing.xs }}>
+                    <Text style={[styles.label, { color: colors.text }]}>Problem Types</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {Object.entries(FACTORING_GROUP_LABELS).map(([key, label]) => {
+                        const active = (settings.factoringCategories ?? []).includes(key);
+                        const isLast = active && (settings.factoringCategories ?? []).length <= 1;
+                        return (
+                          <TouchableOpacity
+                            key={key}
+                            style={{
+                              paddingHorizontal: 14,
+                              paddingVertical: 8,
+                              borderRadius: 10,
+                              backgroundColor: active ? colors.primary : colors.border,
+                              opacity: isLast ? 0.55 : 1,
+                            }}
+                            activeOpacity={0.7}
+                            disabled={isLast}
+                            onPress={() => {
+                              const current = settings.factoringCategories ?? Object.keys(FACTORING_GROUP_LABELS);
+                              const next = active
+                                ? current.filter((g) => g !== key)
+                                : [...current, key];
+                              patch({ factoringCategories: next });
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#FFF' : colors.text }}>{label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {fields.operandMode && (
+                  <View style={{ gap: Spacing.xs }}>
+                    <Text style={[styles.label, { color: colors.text }]}>Operand Size</Text>
+                    <View style={[styles.segmented, { backgroundColor: colors.border }]}>
+                      {(['3x1', '2x2', 'both'] as const).map((opt) => {
+                        const active = (settings.operandMode ?? '3x1') === opt;
+                        return (
+                          <TouchableOpacity
+                            key={opt}
+                            style={[
+                              styles.segmentBtn,
+                              active && { backgroundColor: colors.primary },
+                            ]}
+                            activeOpacity={0.7}
+                            onPress={() => patch({ operandMode: opt })}
+                          >
+                            <Text
+                              style={[
+                                styles.segmentText,
+                                { color: active ? '#FFF' : colors.text },
+                              ]}
+                            >
+                              {opt === '3x1' ? '3×1 digit' : opt === '2x2' ? '2×2 digit' : 'Both'}
+                            </Text>
                           </TouchableOpacity>
                         );
                       })}

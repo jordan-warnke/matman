@@ -48,7 +48,7 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
   },
   primes: {
     gameType: 'primes-time-attack',
-    fields: { maxNumber: { min: 20, max: 200 }, timePerProblem: true, problemCount: true },
+    fields: { maxNumber: { min: 50, max: 400 }, timePerProblem: true, problemCount: true },
   },
   bounding: {
     gameType: 'bound-time-attack',
@@ -66,6 +66,14 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
     gameType: 'gauntlet-drill',
     fields: { timePerProblem: true, problemCount: true, gauntletCategories: true },
   },
+  factoring: {
+    gameType: 'factoring-drill',
+    fields: { timePerProblem: true, problemCount: true, factoringCategories: true },
+  },
+  longdiv: {
+    gameType: 'longdiv-drill',
+    fields: { minNumber: { min: 2, max: 12 }, maxNumber: { min: 2, max: 12 }, timePerProblem: true, problemCount: true, questionStyle: true, operandMode: true, shuffleOrder: true },
+  },
   estimation: {
     gameType: 'estimation-drill',
     fields: { timePerProblem: true, problemCount: true },
@@ -76,6 +84,10 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
   },
   verbal: {
     gameType: 'verbal-drill',
+    fields: { timePerProblem: true, problemCount: true },
+  },
+  numbersense: {
+    gameType: 'numbersense-drill',
     fields: { timePerProblem: true, problemCount: true },
   },
 };
@@ -292,6 +304,26 @@ export default function MainMenu() {
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
             onPress={() => setSettingsMode('verbal')}
+          >
+            <SlidersIcon color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.purpleDark, borderBottomWidth: 5 }]}>
+          <TouchableOpacity
+            style={styles.cardMain}
+            activeOpacity={0.85}
+            onPress={() => router.push({ pathname: '/numbersense/game' as any, params: { type: 'numbersense-drill' } })}
+          >
+            <View style={[styles.iconBox, { backgroundColor: colors.purple }]}>
+                <Text style={styles.iconText}>↕</Text>
+              </View>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Number Sense</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cogBtn, { borderLeftColor: colors.border }]}
+            hitSlop={8}
+            onPress={() => setSettingsMode('numbersense')}
           >
             <SlidersIcon color={colors.muted} />
           </TouchableOpacity>

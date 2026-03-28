@@ -28,6 +28,7 @@ import {
 } from '../../store/HistoryStore';
 
 const GAME_TYPE: GameType = 'arith-survival';
+const LONGDIV_TYPE: GameType = 'longdiv-drill';
 
 export default function ArithmeticHub() {
   const router = useRouter();
@@ -35,31 +36,44 @@ export default function ArithmeticHub() {
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTarget, setSettingsTarget] = useState<GameType>(GAME_TYPE);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const [ldSettings, setLdSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
 
   useEffect(() => {
     loadModeSettings(GAME_TYPE).then(setSettings);
+    loadModeSettings(LONGDIV_TYPE).then(setLdSettings);
   }, []);
 
   useEffect(() => {
     if (showSettings) {
+      const s = settingsTarget === LONGDIV_TYPE ? ldSettings : settings;
       setDrafts({
-        minNumber: String(settings.minNumber || 2),
-        maxNumber: String(settings.maxNumber || 25),
-        problemCount: settings.problemCount ? String(settings.problemCount) : '',
+        minNumber: String(s.minNumber || 2),
+        maxNumber: String(s.maxNumber || (settingsTarget === LONGDIV_TYPE ? 12 : 25)),
+        problemCount: s.problemCount ? String(s.problemCount) : '',
       });
     }
-  }, [showSettings]);
+  }, [showSettings, settingsTarget]);
 
   async function patch(update: Partial<ModeSettings>) {
-    const next = { ...settings, ...update };
-    setSettings(next);
-    await saveModeSettings(GAME_TYPE, update);
+    if (settingsTarget === LONGDIV_TYPE) {
+      const next = { ...ldSettings, ...update };
+      setLdSettings(next);
+      await saveModeSettings(LONGDIV_TYPE, update);
+    } else {
+      const next = { ...settings, ...update };
+      setSettings(next);
+      await saveModeSettings(GAME_TYPE, update);
+    }
   }
 
   function commitDrafts() {
-    const minN = clamp(drafts.minNumber, 2, 25);
-    const maxN = clamp(drafts.maxNumber, 2, 25);
+    const isLD = settingsTarget === LONGDIV_TYPE;
+    const maxClamp = isLD ? 12 : 25;
+    const minN = clamp(drafts.minNumber, 2, maxClamp);
+    const maxN = clamp(drafts.maxNumber, 2, maxClamp);
     const countRaw = parseInt(drafts.problemCount, 10);
     const problemCount = isNaN(countRaw) || countRaw < 1 ? 0 : Math.min(countRaw, 100);
     patch({ minNumber: Math.min(minN, maxN), maxNumber: Math.max(minN, maxN), problemCount });
@@ -77,7 +91,7 @@ export default function ArithmeticHub() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Text style={[styles.back, { color: colors.primary }]}>←</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Growth Analysis' : 'Squares & Roots'}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isWork ? 'Growth Analysis' : 'Arithmetic'}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -97,7 +111,28 @@ export default function ArithmeticHub() {
           <TouchableOpacity
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
-            onPress={() => setShowSettings(true)}
+            onPress={() => { setSettingsTarget(GAME_TYPE); setShowSettings(true); }}
+          >
+            <Feather name="sliders" size={20} color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Long Division Card ──────── */}
+        <View style={[styles.modeCard, { borderColor: colors.secondary, backgroundColor: colors.card }]}>
+          <TouchableOpacity
+            style={styles.modeMain}
+            activeOpacity={0.85}
+            onPress={() => router.push({ pathname: '/arithmetic/longdiv' as any, params: { type: LONGDIV_TYPE } })}
+          >
+            <View style={[styles.modeIcon, { backgroundColor: colors.secondary }]}>
+              <Text style={styles.modeEmoji}>➗</Text>
+            </View>
+            <Text style={[styles.modeName, { color: colors.text }]}>Long Division</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cogBtn, { borderLeftColor: colors.border }]}
+            hitSlop={8}
+            onPress={() => { setSettingsTarget(LONGDIV_TYPE); setShowSettings(true); }}
           >
             <Feather name="sliders" size={20} color={colors.muted} />
           </TouchableOpacity>
@@ -108,10 +143,14 @@ export default function ArithmeticHub() {
       <Modal visible={showSettings} animationType="fade" transparent>
         <View style={styles.overlay}>
           <View style={[styles.modal, { backgroundColor: colors.card }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Settings</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {settingsTarget === LONGDIV_TYPE ? 'Long Division Settings' : 'Settings'}
+            </Text>
 
             <View style={styles.modalRow}>
-              <Text style={[styles.modalLabel, { color: colors.text }]}>Min number (2–25)</Text>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>
+                {settingsTarget === LONGDIV_TYPE ? 'Min divisor (2–12)' : 'Min number (2–25)'}
+              </Text>
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.border, color: colors.text }]}
                 keyboardType="number-pad"
@@ -122,7 +161,9 @@ export default function ArithmeticHub() {
             </View>
 
             <View style={styles.modalRow}>
-              <Text style={[styles.modalLabel, { color: colors.text }]}>Max number (2–25)</Text>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>
+                {settingsTarget === LONGDIV_TYPE ? 'Max divisor (2–12)' : 'Max number (2–25)'}
+              </Text>
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.border, color: colors.text }]}
                 keyboardType="number-pad"

@@ -15,6 +15,7 @@ import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { AlgebraProblem, ALL_ALGEBRA_PROBLEMS, shuffleOptions } from '../../data/algebra';
+import { buildFactoringPool, FactoringProblem, shuffleFactoringOptions } from '../../data/factoring';
 import { ALL_WORD_PROBLEMS, shuffleWordOptions, WordProblem } from '../../data/wordprob';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
@@ -47,6 +48,7 @@ export default function AlgebraGameScreen() {
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType = (type || 'algebra-drill') as GameType;
   const isAlgebra = gameType === 'algebra-drill' || gameType === 'gauntlet-drill';
+  const isFactoring = gameType === 'factoring-drill';
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
@@ -64,6 +66,23 @@ export default function AlgebraGameScreen() {
 
   const generate = useCallback((): Problem => {
     const history = historyRef.current;
+
+    // Factoring drill: procedurally generated pool
+    if (isFactoring) {
+      const pool = buildFactoringPool(settings.factoringCategories ?? []);
+      const recent = new Set(recentRef.current);
+      const eligible = pool.filter(p => !recent.has(p.historyKey));
+      const candidates = eligible.length > 0 ? eligible : pool;
+      let best: FactoringProblem = candidates[0];
+      let bestW = -1;
+      for (const item of candidates) {
+        const w = ankiWeight(history[item.historyKey]) * (0.5 + Math.random());
+        if (w > bestW) { bestW = w; best = item; }
+      }
+      recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
+      return shuffleFactoringOptions(best);
+    }
+
     let pool: (AlgebraProblem | WordProblem)[] = isAlgebra ? ALL_ALGEBRA_PROBLEMS : ALL_WORD_PROBLEMS;
 
     // Gauntlet: filter by selected category groups
@@ -95,7 +114,7 @@ export default function AlgebraGameScreen() {
       : shuffleWordOptions(best as WordProblem);
 
     return shuffled;
-  }, [isAlgebra, gameType, settings.gauntletCategories]);
+  }, [isAlgebra, isFactoring, gameType, settings.gauntletCategories, settings.factoringCategories]);
 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
@@ -231,13 +250,21 @@ export default function AlgebraGameScreen() {
   const repeatQuestion = useCallback(() => {
     if (problem) {
       const prevIdx = problem.options.indexOf(problem.answer);
-      const pool = isAlgebra ? ALL_ALGEBRA_PROBLEMS : ALL_WORD_PROBLEMS;
-      const original = pool.find(p => p.historyKey === problem.historyKey);
-      if (original) {
-        const reshuffled = isAlgebra
-          ? shuffleOptions(original as AlgebraProblem, prevIdx)
-          : shuffleWordOptions(original as WordProblem, prevIdx);
-        setProblem(reshuffled);
+      if (isFactoring) {
+        const facPool = buildFactoringPool(settings.factoringCategories ?? []);
+        const original = facPool.find(p => p.historyKey === problem.historyKey);
+        if (original) {
+          setProblem(shuffleFactoringOptions(original, prevIdx));
+        }
+      } else {
+        const pool = isAlgebra ? ALL_ALGEBRA_PROBLEMS : ALL_WORD_PROBLEMS;
+        const original = pool.find(p => p.historyKey === problem.historyKey);
+        if (original) {
+          const reshuffled = isAlgebra
+            ? shuffleOptions(original as AlgebraProblem, prevIdx)
+            : shuffleWordOptions(original as WordProblem, prevIdx);
+          setProblem(reshuffled);
+        }
       }
     }
     setFeedback('none');

@@ -14,6 +14,7 @@ function InnerLayout() {
       <Stack.Screen name="times-tables/index" />
       <Stack.Screen name="fdp/index" />
       <Stack.Screen name="arithmetic/index" />
+      <Stack.Screen name="arithmetic/longdiv" />
       <Stack.Screen name="primes/index" />
       <Stack.Screen name="bounding/index" />
       <Stack.Screen name="parity/index" />
@@ -22,6 +23,7 @@ function InnerLayout() {
       <Stack.Screen name="datastats/game" />
       <Stack.Screen name="verbal/index" />
       <Stack.Screen name="verbal/game" />
+      <Stack.Screen name="numbersense/game" />
     </Stack>
   );
 }
