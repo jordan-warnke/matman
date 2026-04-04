@@ -42,7 +42,11 @@ export default function TimesTablesHub() {
       setDrafts({
         maxNumber: String(settings.maxNumber),
         timeAttackSeconds: String(settings.timeAttackSeconds),
-        anchor: settings.anchor ? String(settings.anchor) : '',
+        anchor: settings.anchor
+          ? Array.isArray(settings.anchor)
+            ? settings.anchor.join(',')
+            : String(settings.anchor)
+          : '',
         problemCount: settings.problemCount ? String(settings.problemCount) : '',
       });
     }
@@ -62,17 +66,25 @@ export default function TimesTablesHub() {
   }
 
   function commitDrafts() {
-    const maxNumber = clamp(drafts.maxNumber, 1, 13);
+    const maxCap = settings.operationType === 'multiply' ? 13 : 25;
+    const maxNumber = clamp(drafts.maxNumber, 1, maxCap);
     const timeAttackSeconds = clamp(drafts.timeAttackSeconds, 1, 60);
-    const anchorRaw = parseInt(drafts.anchor, 10);
-    const anchor = isNaN(anchorRaw) || anchorRaw < 1 ? null : Math.min(anchorRaw, 13);
+    const anchorParsed = drafts.anchor
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n) && n >= 1)
+      .map((n) => Math.min(n, 25));
+    const anchor: number | number[] | null =
+      anchorParsed.length === 0 ? null : anchorParsed.length === 1 ? anchorParsed[0] : anchorParsed;
     const countRaw = parseInt(drafts.problemCount, 10);
     const problemCount = isNaN(countRaw) || countRaw < 1 ? 0 : Math.min(countRaw, 100);
     patch({ maxNumber, timeAttackSeconds, anchor, problemCount });
     setDrafts({
       maxNumber: String(maxNumber),
       timeAttackSeconds: String(timeAttackSeconds),
-      anchor: anchor ? String(anchor) : '',
+      anchor: anchor
+        ? Array.isArray(anchor) ? anchor.join(',') : String(anchor)
+        : '',
       problemCount: problemCount ? String(problemCount) : '',
     });
   }
@@ -121,14 +133,17 @@ export default function TimesTablesHub() {
             <ScrollView showsVerticalScrollIndicator={true} style={{ flexShrink: 1 }}>
 
             <View style={styles.modalRow}>
-              <Text style={[styles.modalLabel, { color: colors.text }]}>Max number (1–13)</Text>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>
+                Max number (1–{settings.operationType === 'multiply' ? '13' : '25'})
+              </Text>
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.border, color: colors.text }]}
                 keyboardType="number-pad"
                 value={drafts.maxNumber ?? ''}
                 onChangeText={(v) => setDrafts((d) => ({ ...d, maxNumber: v }))}
                 onBlur={() => {
-                  const c = clamp(drafts.maxNumber, 1, 13);
+                  const maxCap = settings.operationType === 'multiply' ? 13 : 25;
+                  const c = clamp(drafts.maxNumber, 1, maxCap);
                   setDrafts((d) => ({ ...d, maxNumber: String(c) }));
                   patch({ maxNumber: c });
                 }}
@@ -156,18 +171,27 @@ export default function TimesTablesHub() {
               <Text style={[styles.modalLabel, { color: colors.text }]}>Anchor number</Text>
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.border, color: colors.text }]}
-                keyboardType="number-pad"
-                placeholder="off"
+                keyboardType="default"
+                placeholder="off (e.g. 12,13)"
                 placeholderTextColor={colors.muted}
                 value={drafts.anchor ?? ''}
                 onChangeText={(v) => setDrafts((d) => ({ ...d, anchor: v }))}
                 onBlur={() => {
-                  const n = parseInt(drafts.anchor, 10);
-                  const val = isNaN(n) || n < 1 ? null : Math.min(n, 13);
-                  setDrafts((d) => ({ ...d, anchor: val ? String(val) : '' }));
+                  const parsed = drafts.anchor
+                    .split(',')
+                    .map((s) => parseInt(s.trim(), 10))
+                    .filter((n) => !isNaN(n) && n >= 1)
+                    .map((n) => Math.min(n, 25));
+                  const val: number | number[] | null =
+                    parsed.length === 0 ? null : parsed.length === 1 ? parsed[0] : parsed;
+                  setDrafts((d) => ({
+                    ...d,
+                    anchor: val
+                      ? Array.isArray(val) ? val.join(',') : String(val)
+                      : '',
+                  }));
                   patch({ anchor: val });
                 }}
-                maxLength={2}
               />
             </View>
 

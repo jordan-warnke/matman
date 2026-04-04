@@ -16,14 +16,13 @@ import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ALL_DI_PROBLEMS, DataInsightsProblem, shuffleDIOptions } from '../../data/datainsights';
 import { ALL_DATASTATS_PROBLEMS, DataStatsProblem, shuffleDataStatsOptions } from '../../data/datastats';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
-    ankiWeight,
     DEFAULT_MODE_SETTINGS,
     GameType,
-    History,
-    loadHistory,
     loadModeSettings,
     ModeSettings,
     recordByKey,
@@ -42,37 +41,23 @@ export default function DataStatsGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
-  const recentRef = useRef<string[]>([]);
+  const selector = useRetrySelector({
+    pool: isDI ? (ALL_DI_PROBLEMS as Problem[]) : (ALL_DATASTATS_PROBLEMS as Problem[]),
+  });
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       setReady(true);
     });
   }, [gameType]);
 
   const generate = useCallback((): Problem => {
-    const history = historyRef.current;
-    const pool: Problem[] = isDI ? ALL_DI_PROBLEMS : ALL_DATASTATS_PROBLEMS;
-    const recent = new Set(recentRef.current);
-
-    const eligible = pool.filter(p => !recent.has(p.historyKey));
-    const candidates = eligible.length > 0 ? eligible : pool;
-
-    let best: Problem = candidates[0];
-    let bestW = -1;
-    for (const item of candidates) {
-      const w = ankiWeight(history[item.historyKey]) * (0.5 + Math.random());
-      if (w > bestW) { bestW = w; best = item; }
-    }
-
-    recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
+    const chosen = selector.next();
     return isDI
-      ? shuffleDIOptions(best as DataInsightsProblem)
-      : shuffleDataStatsOptions(best as DataStatsProblem);
-  }, [isDI]);
+      ? shuffleDIOptions(chosen as DataInsightsProblem)
+      : shuffleDataStatsOptions(chosen as DataStatsProblem);
+  }, [isDI, selector]);
 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
@@ -166,7 +151,8 @@ export default function DataStatsGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -226,14 +212,17 @@ export default function DataStatsGameScreen() {
     if (timed) startProblemTimer();
   }, [timed, startProblemTimer, problem, isDI, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
   const workFormula = problem
-    ? problem.display
+    ? (problem.question ? `${problem.display}  ·  ${problem.question}` : problem.display)
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   useWebShortcuts(
     problem
@@ -314,6 +303,7 @@ export default function DataStatsGameScreen() {
         onPress: () => answer(opt),
       }))}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={problem.answer}
       peekValue={problem.answer}
       peekVisible={peekVisible && feedback === 'none'}
@@ -345,22 +335,25 @@ export default function DataStatsGameScreen() {
       <View style={styles.problemArea}>
         <View style={styles.problemInlineRow}>
           <View style={styles.promptBlock}>
+            <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
             <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
               <MathText text={problem.display} style={[styles.displayText, { color: feedbackColor }]} />
               <Text style={[styles.questionText, { color: colors.text }]}> 
                 {problem.question}
               </Text>
             </Animated.View>
+            {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+            </TouchableOpacity>
           </View>
         </View>
-        {(feedback !== 'none' || peekVisible) && (
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <MathText
             text={`= ${problem.answer}`}
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}
@@ -378,7 +371,7 @@ export default function DataStatsGameScreen() {
 
           if (feedback !== 'none') {
             if (isCorrectOption) {
-              optStyle = { backgroundColor: colors.correct, borderColor: colors.correct };
+              optStyle = { backgroundColor: correctColor, borderColor: correctColor };
               textColor = '#FFF';
             } else if (isSelected) {
               optStyle = { backgroundColor: colors.error + '22', borderColor: colors.error };

@@ -14,15 +14,14 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     DEFAULT_MODE_SETTINGS,
     GameType,
-    History,
     ModeSettings,
-    ankiWeight,
-    loadHistory,
     loadModeSettings,
     recordByKey,
 } from '../../store/HistoryStore';
@@ -51,34 +50,23 @@ interface ArithProblem {
 // Squares: n² for n = 2-25
 // Roots: √(n²) for n = 2-25
 
-function buildPool(history: History, minN = 2, maxN = 25) {
-  const pool: { gen: () => ArithProblem; weight: number }[] = [];
+function buildPool(minN = 2, maxN = 25) {
+  const pool: ArithProblem[] = [];
 
   for (let n = minN; n <= maxN; n++) {
-    // Square: "n² = ?"
-    const sqKey = `arith:sq${n}`;
     pool.push({
-      weight: ankiWeight(history[sqKey]),
-      gen: () => ({
-        display: `${n}²`,
-        answer: n * n,
-        type: 'square',
-        historyKey: sqKey,
-        options: [],
-      }),
+      display: `${n}²`,
+      answer: n * n,
+      type: 'square',
+      historyKey: `arith:sq${n}`,
+      options: [],
     });
-
-    // Root: "√(n²) = ?"
-    const rtKey = `arith:rt${n * n}`;
     pool.push({
-      weight: ankiWeight(history[rtKey]),
-      gen: () => ({
-        display: `√${n * n}`,
-        answer: n,
-        type: 'root',
-        historyKey: rtKey,
-        options: [],
-      }),
+      display: `√${n * n}`,
+      answer: n,
+      type: 'root',
+      historyKey: `arith:rt${n * n}`,
+      options: [],
     });
   }
 
@@ -129,12 +117,15 @@ export default function ArithmeticGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
+  const historyRef = useRef<{}>({});
+
+  const selector = useRetrySelector({
+    pool: buildPool(settings.minNumber || 2, settings.maxNumber || 25),
+  });
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       setReady(true);
     });
   }, [gameType]);
@@ -163,18 +154,11 @@ export default function ArithmeticGameScreen() {
   const advanceReadyRef = useRef(0);
 
   const generate = useCallback((): ArithProblem => {
-    const pool = buildPool(historyRef.current, settings.minNumber || 2, settings.maxNumber || 25);
-    const totalWeight = pool.reduce((s, p) => s + p.weight, 0);
-    let rand = Math.random() * totalWeight;
-    let chosen = pool[0];
-    for (const p of pool) {
-      rand -= p.weight;
-      if (rand <= 0) { chosen = p; break; }
-    }
-    const prob = chosen.gen();
+    const chosen = selector.next();
+    const prob = { ...chosen };
     prob.options = generateDistractors(prob.answer, prob.type);
     return prob;
-  }, []);
+  }, [selector]);
 
   // ── start ──
   useEffect(() => {
@@ -247,7 +231,8 @@ export default function ArithmeticGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -322,14 +307,17 @@ export default function ArithmeticGameScreen() {
     lastTickRef.current = Date.now();
   }, [problem, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
   const workFormula = problem
     ? problem.display
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   useWebShortcuts(
     problem && multipleChoice
@@ -421,6 +409,7 @@ export default function ArithmeticGameScreen() {
       onInputChange={!multipleChoice ? (v) => setInput(v) : undefined}
       onInputSubmit={!multipleChoice ? handleInputSubmit : undefined}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={String(problem.answer)}
       peekValue={String(problem.answer)}
       peekVisible={peekVisible && feedback === 'none'}
@@ -450,18 +439,21 @@ export default function ArithmeticGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
+        <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
         <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
           <Text style={[styles.problemText, { color: feedbackColor }]}> 
             {problem.display}
           </Text>
         </Animated.View>
-        {(feedback !== 'none' || peekVisible) && (
+        {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+        </TouchableOpacity>
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}
@@ -481,7 +473,7 @@ export default function ArithmeticGameScreen() {
                 style={[
                   styles.mcBtn,
                   { backgroundColor: colors.card, borderColor: colors.border },
-                  feedback === 'correct' && opt === problem.answer && { borderColor: colors.correct, backgroundColor: colors.background },
+                  feedback === 'correct' && opt === problem.answer && { borderColor: correctColor, backgroundColor: colors.background },
                   feedback === 'wrong' && opt === problem.answer && { borderColor: colors.error, backgroundColor: colors.background },
                 ]}
                 activeOpacity={0.7}

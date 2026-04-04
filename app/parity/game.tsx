@@ -19,14 +19,13 @@ import {
     ParityProblem,
     SignProblem,
 } from '../../data/parity';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
-    ankiWeight,
     DEFAULT_MODE_SETTINGS,
     GameType,
-    History,
-    loadHistory,
     loadModeSettings,
     ModeSettings,
     recordByKey,
@@ -46,23 +45,8 @@ export default function ParityGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
-  const recentRef = useRef<string[]>([]);
-
-  useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
-      setSettings(s);
-      historyRef.current = h;
-      setReady(true);
-    });
-  }, [gameType]);
-
-  const generate = useCallback((): Problem => {
-    const history = historyRef.current;
-    const recent = new Set(recentRef.current);
-
-    // Generate a batch and pick the one with highest ankiWeight (with jitter)
-    const candidates = Array.from({ length: 8 }, () => {
+  const selector = useRetrySelector({
+    generate: (): Problem => {
       if (isParity) {
         const p = generateParityProblem();
         return { ...p, correctLabel: p.answer } as Problem;
@@ -70,22 +54,20 @@ export default function ParityGameScreen() {
         const p = generateSignProblem();
         return { ...p, correctLabel: p.answer } as Problem;
       }
+    },
+    candidateCount: 12,
+  });
+
+  useEffect(() => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
+      setSettings(s);
+      setReady(true);
     });
+  }, [gameType]);
 
-    // Filter out recently-seen problems, but keep at least 1
-    const eligible = candidates.filter(c => !recent.has(c.historyKey));
-    const pool = eligible.length > 0 ? eligible : candidates;
-
-    let best = pool[0];
-    let bestW = -1;
-    for (const c of pool) {
-      const w = ankiWeight(history[c.historyKey]) * (0.5 + Math.random());
-      if (w > bestW) { bestW = w; best = c; }
-    }
-
-    recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
-    return best;
-  }, [isParity]);
+  const generate = useCallback((): Problem => {
+    return selector.next();
+  }, [selector]);
 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
@@ -179,7 +161,8 @@ export default function ParityGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -228,14 +211,17 @@ export default function ParityGameScreen() {
     if (timed) startProblemTimer();
   }, [timed, startProblemTimer, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
   const workFormula = problem
     ? problem.display
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   // Button labels
   const btnA = isParity ? 'Even' : 'Pos';
@@ -325,6 +311,7 @@ export default function ParityGameScreen() {
         { label: btnB, onPress: () => answer(btnB) },
       ]}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={problem.correctLabel}
       peekValue={problem.correctLabel}
       peekVisible={peekVisible && feedback === 'none'}
@@ -357,18 +344,21 @@ export default function ParityGameScreen() {
         <Text style={[styles.modeLabel, { color: colors.muted }]}>
           {isParity ? 'Even or Odd?' : 'Positive or Negative?'}
         </Text>
+        <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
         <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
           <Text style={[styles.problemText, { color: feedbackColor }]}> 
             {problem.display}
           </Text>
         </Animated.View>
-        {(feedback !== 'none' || peekVisible) && (
+        {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+        </TouchableOpacity>
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}

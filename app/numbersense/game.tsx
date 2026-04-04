@@ -2,27 +2,27 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import OrderNumberLine from '../../components/OrderNumberLine';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { generateNSProblem, NSExpression, NSProblem } from '../../data/numbersense';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
-  ankiWeight,
-  DEFAULT_MODE_SETTINGS,
-  GameType,
-  History,
-  loadHistory,
-  loadModeSettings,
-  ModeSettings,
-  recordByKey,
+    DEFAULT_MODE_SETTINGS,
+    GameType,
+    loadModeSettings,
+    ModeSettings,
+    recordByKey,
 } from '../../store/HistoryStore';
 
 type TileState = 'idle' | 'correct' | 'wrong' | 'placed';
@@ -35,31 +35,18 @@ export default function NumberSenseGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
-  const recentRef = useRef<string[]>([]);
+  const selector = useRetrySelector({ generate: generateNSProblem, candidateCount: 12 });
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       setReady(true);
     });
   }, [gameType]);
 
   const generate = useCallback((): NSProblem => {
-    const recent = new Set(recentRef.current);
-    let best: NSProblem | null = null;
-    let bestW = -1;
-    for (let i = 0; i < 12; i++) {
-      const c = generateNSProblem();
-      if (recent.has(c.historyKey)) continue;
-      const w = ankiWeight(historyRef.current[c.historyKey]) * (0.5 + Math.random());
-      if (w > bestW) { bestW = w; best = c; }
-    }
-    if (!best) best = generateNSProblem();
-    recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
-    return best;
-  }, []);
+    return selector.next();
+  }, [selector]);
 
   // ── state ─────────────────────────────────────────────
   const [problem, setProblem] = useState<NSProblem | null>(null);
@@ -72,11 +59,14 @@ export default function NumberSenseGameScreen() {
   const [correctCount, setCorrectCount] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [roundDone, setRoundDone] = useState(false);
+  const [reversed, setReversed] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [estimateFeedback, setEstimateFeedback] = useState<'none' | 'correct' | 'wrong'>('none');
 
   // per-tile animations
   const shakeAnims = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
   const scaleAnims = useRef([0, 1, 2, 3].map(() => new Animated.Value(1))).current;
+  const estimateShakeAnim = useRef(new Animated.Value(0)).current;
 
   // hint pulse on correct tile when wrong tile tapped
   const hintPulseIdx = useRef<number | null>(null);
@@ -109,16 +99,22 @@ export default function NumberSenseGameScreen() {
   // ── init ──────────────────────────────────────────────
   const initRound = useCallback((p: NSProblem) => {
     setProblem(p);
-    setTileStates(p.shuffled.map(() => 'idle'));
-    setPlaced([]);
-    setNextExpectedIdx(0);
     setMistakes(0);
     setRoundDone(false);
+    setEstimateFeedback('none');
     shakeAnims.forEach((a) => a.setValue(0));
     scaleAnims.forEach((a) => a.setValue(1));
+    estimateShakeAnim.setValue(0);
     setHintTile(null);
     problemStartRef.current = Date.now();
-  }, [shakeAnims, scaleAnims]);
+    if (p.type === 'order') {
+      const rev = Math.random() < 0.5;
+      setReversed(rev);
+      setTileStates(p.shuffled.map(() => 'idle'));
+      setPlaced([]);
+      setNextExpectedIdx(0);
+    }
+  }, [shakeAnims, scaleAnims, estimateShakeAnim]);
 
   useEffect(() => {
     if (!ready) return;
@@ -128,12 +124,13 @@ export default function NumberSenseGameScreen() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [ready]);
 
-  // ── tile tap ──────────────────────────────────────────
+  // ── tile tap (order only) ───────────────────────────────
   const handleTileTap = useCallback(
     async (shuffledIndex: number) => {
-      if (!problem || roundDone) return;
+      if (!problem || problem.type !== 'order' || roundDone) return;
       const tapped = problem.shuffled[shuffledIndex];
-      const expected = problem.sorted[nextExpectedIdx];
+      const order = reversed ? [...problem.sorted].reverse() : problem.sorted;
+      const expected = order[nextExpectedIdx];
 
       if (tapped.value === expected.value) {
         // correct
@@ -152,7 +149,8 @@ export default function NumberSenseGameScreen() {
           const elapsed = Date.now() - problemStartRef.current;
           const perfect = mistakes === 0;
           await recordByKey(problem.historyKey, perfect, elapsed);
-          historyRef.current = await loadHistory();
+          if (!perfect) selector.enqueueRetry(problem.historyKey, problem);
+          await selector.refreshHistory();
           setAnswered((c) => c + 1);
           if (perfect) {
             setCorrectCount((c) => c + 1);
@@ -189,7 +187,42 @@ export default function NumberSenseGameScreen() {
         }
       }
     },
-    [problem, roundDone, nextExpectedIdx, mistakes, scaleAnims, shakeAnims],
+    [problem, roundDone, nextExpectedIdx, mistakes, reversed, scaleAnims, shakeAnims],
+  );
+
+  // ── estimate answer (MC) ──────────────────────────────
+  const handleEstimateAnswer = useCallback(
+    async (optionIndex: number) => {
+      if (!problem || problem.type !== 'estimate' || roundDone) return;
+      const correct = optionIndex === problem.correctIndex;
+      setEstimateFeedback(correct ? 'correct' : 'wrong');
+
+      if (correct) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setStreak((s) => s + 1);
+        setCorrectCount((c) => c + 1);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setMistakes(1);
+        setStreak(0);
+        Animated.sequence([
+          Animated.timing(estimateShakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+          Animated.timing(estimateShakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+          Animated.timing(estimateShakeAnim, { toValue: 6, duration: 50, useNativeDriver: true }),
+          Animated.timing(estimateShakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        ]).start();
+        selector.enqueueRetry(problem.historyKey, problem);
+      }
+
+      const elapsed = Date.now() - problemStartRef.current;
+      await recordByKey(problem.historyKey, correct, elapsed);
+      await selector.refreshHistory();
+      setAnswered((c) => c + 1);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      setRoundDone(true);
+      advanceReadyRef.current = Date.now() + 500;
+    },
+    [problem, roundDone, estimateShakeAnim, selector],
   );
 
   // ── advance ───────────────────────────────────────────
@@ -204,23 +237,26 @@ export default function NumberSenseGameScreen() {
     if (timed) startProblemTimer();
   }, [generate, answered, settings.problemCount, timed, startProblemTimer, initRound]);
 
-  // ── keyboard shortcuts (1-4 pick tiles) ───────────────
-  const tileCallbacks = problem
-    ? problem.shuffled.map((_, i) =>
-        roundDone ? null
-        : tileStates[i] === 'placed' ? null
-        : () => handleTileTap(i))
+  // ── keyboard shortcuts (1-4) ────────────────────────────
+  const shortcutCallbacks = problem && !roundDone
+    ? problem.type === 'order'
+      ? problem.shuffled.map((_, i) =>
+          tileStates[i] === 'placed' ? null : () => handleTileTap(i))
+      : problem.options.map((_, i) => () => handleEstimateAnswer(i))
     : [];
 
   useWebShortcuts(
-    tileCallbacks,
+    shortcutCallbacks,
     roundDone ? advanceNext : undefined,
   );
 
   // ── work mode formula ─────────────────────────────────
   const workFormula = problem
-    ? `Sort: ${problem.shuffled.map((e) => e.display).join(', ')}`
+    ? problem.type === 'order'
+      ? `Sort${reversed ? ' (desc)' : ''}: ${problem.shuffled.map((e) => e.display).join(', ')}`
+      : `${problem.display} ${problem.question}`
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   // ── render ────────────────────────────────────────────
   if (!ready || !problem) {
@@ -275,14 +311,34 @@ export default function NumberSenseGameScreen() {
       <SpreadsheetChrome
         formula={workFormula}
         cellRef="E3"
-        options={problem.shuffled
-          .filter((_, i) => tileStates[i] !== 'placed')
-          .map((e, i) => ({
+        options={problem.type === 'order'
+          ? problem.shuffled
+              .filter((_, i) => tileStates[i] !== 'placed')
+              .map((e) => ({
+                label: e.display,
+                onPress: () => handleTileTap(problem.shuffled.indexOf(e)),
+              }))
+          : problem.options.map((opt, i) => ({
+              label: opt,
+              onPress: () => handleEstimateAnswer(i),
+            }))}
+        feedbackState={problem.type === 'order'
+          ? (roundDone ? 'correct' : null)
+          : (estimateFeedback !== 'none' ? estimateFeedback : null)}
+        correctAnswer={problem.type === 'order'
+          ? (() => {
+              const order = reversed ? [...problem.sorted].reverse() : problem.sorted;
+              const sep = reversed ? ' > ' : ' < ';
+              return order.map((e) => e.display).join(sep);
+            })()
+          : problem.answer}
+        answerRows={problem.type === 'order' && isWork && roundDone ? (() => {
+          const order = reversed ? [...problem.sorted].reverse() : problem.sorted;
+          return order.map((e) => ({
             label: e.display,
-            onPress: () => handleTileTap(problem.shuffled.indexOf(e)),
-          }))}
-        feedbackState={roundDone ? 'correct' : null}
-        correctAnswer={problem.sorted.map((e) => e.display).join(' < ')}
+            detail: e.reveal.replace('= ', ''),
+          }));
+        })() : undefined}
         onBack={() => router.back()}
         onNext={roundDone ? advanceNext : undefined}
       >
@@ -304,85 +360,169 @@ export default function NumberSenseGameScreen() {
           </View>
         </View>
 
-        {/* Category + instruction */}
-        <View style={styles.promptArea}>
-          <Text style={[styles.categoryLabel, { color: colors.muted }]}>{problem.category}</Text>
-          <Text style={[styles.instruction, { color: colors.text }]}>
-            Tap smallest → largest
-          </Text>
-        </View>
+        {problem.type === 'order' ? (
+          <>
+            {/* Category + instruction */}
+            <View style={styles.promptArea}>
+              <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
+              <Text style={[styles.categoryLabel, { color: colors.muted }]}>{problem.category}</Text>
+              <Text style={[styles.instruction, { color: colors.text }]}>
+                Tap {reversed ? 'largest → smallest' : 'smallest → largest'}
+              </Text>
+              {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+              </TouchableOpacity>
+            </View>
 
-        {/* Placed row — the "number line" */}
-        {placed.length > 0 && (
-          <View style={styles.placedRow}>
-            {placed.map((expr, i) => (
-              <View key={i} style={[styles.placedChip, { backgroundColor: modeColor }]}>
-                <Text style={styles.placedDisplay}>{expr.display}</Text>
-                <Text style={styles.placedReveal}>{expr.reveal}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+            {/* Number line visualization */}
+            <OrderNumberLine
+              points={problem.sorted.map((expr) => ({
+                value: expr.value,
+                display: expr.display,
+                reveal: expr.reveal,
+                placed: placed.some((p) => p.value === expr.value),
+              }))}
+              colors={colors}
+              accentColor={modeColor}
+              revealed={roundDone}
+            />
 
-        {/* 2×2 tile grid */}
-        <View style={styles.tileGrid}>
-          {problem.shuffled.map((expr, i) => {
-            const state = tileStates[i];
-            if (state === 'placed') return <View key={i} style={styles.tileSlot} />;
+            {/* 2×2 tile grid */}
+            <View style={styles.tileGrid}>
+              {problem.shuffled.map((expr, i) => {
+                const state = tileStates[i];
+                if (state === 'placed') return <View key={i} style={styles.tileSlot} />;
 
-            const isHinted = hintTile === i;
-            const isWrong = state === 'wrong';
-            const bgColor = isWrong
-              ? colors.error + '22'
-              : isHinted
-                ? modeColor + '33'
-                : colors.card;
-            const borderColor = isWrong
-              ? colors.error
-              : isHinted
-                ? modeColor
-                : colors.border;
+                const isHinted = hintTile === i;
+                const isWrong = state === 'wrong';
+                const bgColor = isWrong
+                  ? colors.error + '22'
+                  : isHinted
+                    ? modeColor + '33'
+                    : colors.card;
+                const borderColor = isWrong
+                  ? colors.error
+                  : isHinted
+                    ? modeColor
+                    : colors.border;
 
-            return (
-              <Animated.View
-                key={i}
-                style={[
-                  styles.tile,
-                  { backgroundColor: bgColor, borderColor },
-                  { transform: [{ translateX: shakeAnims[i] }, { scale: scaleAnims[i] }] },
-                ]}
-              >
+                return (
+                  <Animated.View
+                    key={i}
+                    style={[
+                      styles.tile,
+                      { backgroundColor: bgColor, borderColor },
+                      { transform: [{ translateX: shakeAnims[i] }, { scale: scaleAnims[i] }] },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={styles.tileTouch}
+                      activeOpacity={0.7}
+                      onPress={() => handleTileTap(i)}
+                    >
+                      <Text style={[styles.tileNum, { color: isHinted ? modeColor : colors.muted }]}>
+                        {i + 1}
+                      </Text>
+                      <Text style={[styles.tileDisplay, { color: isHinted ? modeColor : colors.text }]} numberOfLines={1}>
+                        {expr.display}
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              })}
+            </View>
+
+            {/* Round complete */}
+            {roundDone && (
+              <View style={styles.roundDoneArea}>
+                {!isWork && (
+                  <View style={styles.decimalRow}>
+                    {(reversed ? [...problem.sorted].reverse() : problem.sorted).map((expr, i) => (
+                      <View key={i} style={[styles.decimalChip, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.decimalDisplay, { color: colors.text }]} numberOfLines={1}>{expr.display}</Text>
+                        <Text style={[styles.decimalValue, { color: colors.muted }]} numberOfLines={1}>{expr.reveal}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <Text style={[styles.roundResult, { color: mistakes === 0 ? colors.correct : colors.text }]}>
+                  {mistakes === 0 ? 'Perfect!' : `${mistakes} mistake${mistakes > 1 ? 's' : ''}`}
+                </Text>
                 <TouchableOpacity
-                  style={styles.tileTouch}
-                  activeOpacity={0.7}
-                  onPress={() => handleTileTap(i)}
+                  style={[styles.nextBtn, { backgroundColor: modeColor, borderBottomColor: modeColorDark }]}
+                  activeOpacity={0.85}
+                  onPress={advanceNext}
                 >
-                  <Text style={[styles.tileNum, { color: isHinted ? modeColor : colors.text }]}>
-                    {i + 1}
-                  </Text>
-                  <Text style={[styles.tileDisplay, { color: isHinted ? modeColor : colors.text }]}>
-                    {expr.display}
-                  </Text>
+                  <Text style={styles.nextText}>→</Text>
                 </TouchableOpacity>
+              </View>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Estimate: question */}
+            <View style={styles.promptArea}>
+              <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
+              <Text style={[styles.categoryLabel, { color: colors.muted }]}>{problem.category}</Text>
+              <Animated.View style={{ transform: [{ translateX: estimateShakeAnim }] }}>
+                <Text style={[styles.estimateDisplay, { color: colors.text }]}>{problem.display}</Text>
+                <Text style={[styles.instruction, { color: estimateFeedback === 'correct' ? colors.correct : estimateFeedback === 'wrong' ? colors.error : colors.text }]}>
+                  {problem.question}
+                </Text>
               </Animated.View>
-            );
-          })}
-        </View>
+              {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+              </TouchableOpacity>
+            </View>
 
-        {/* Round complete */}
-        {roundDone && (
-          <View style={styles.roundDoneArea}>
-            <Text style={[styles.roundResult, { color: mistakes === 0 ? colors.correct : colors.text }]}>
-              {mistakes === 0 ? 'Perfect!' : `${mistakes} mistake${mistakes > 1 ? 's' : ''}`}
-            </Text>
-            <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: modeColor, borderBottomColor: modeColorDark }]}
-              activeOpacity={0.85}
-              onPress={advanceNext}
-            >
-              <Text style={styles.nextText}>→</Text>
-            </TouchableOpacity>
-          </View>
+            {/* Estimate: MC options */}
+            <View style={styles.estimateGrid}>
+              {problem.options.map((opt, i) => {
+                const isCorrect = i === problem.correctIndex;
+                const answered = estimateFeedback !== 'none';
+                const bgColor = answered
+                  ? isCorrect
+                    ? colors.correct + '22'
+                    : colors.card
+                  : colors.card;
+                const borderColor = answered
+                  ? isCorrect
+                    ? colors.correct
+                    : colors.border
+                  : colors.border;
+                const textColor = answered && isCorrect ? colors.correct : colors.text;
+
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.estimateOption, { backgroundColor: bgColor, borderColor }]}
+                    activeOpacity={0.7}
+                    onPress={() => handleEstimateAnswer(i)}
+                    disabled={answered}
+                  >
+                    <Text style={[styles.estimateOptionNum, { color: answered && isCorrect ? colors.correct : colors.muted }]}>
+                      {i + 1}
+                    </Text>
+                    <Text style={[styles.estimateOptionText, { color: textColor }]}>{opt}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Estimate: result + next */}
+            {roundDone && (
+              <View style={styles.roundDoneArea}>
+                <Text style={[styles.roundResult, { color: estimateFeedback === 'correct' ? colors.correct : colors.error }]}>
+                  {estimateFeedback === 'correct' ? 'Correct!' : `Answer: ${problem.answer}`}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.nextBtn, { backgroundColor: modeColor, borderBottomColor: modeColorDark }]}
+                  activeOpacity={0.85}
+                  onPress={advanceNext}
+                >
+                  <Text style={styles.nextText}>→</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         )}
 
         <View style={styles.footer} />
@@ -444,18 +584,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
   },
   tileSlot: {
-    width: '44%',
-    aspectRatio: 1.4,
+    width: '46%',
+    height: 56,
   },
   tile: {
-    width: '44%',
-    aspectRatio: 1.4,
-    borderRadius: 16,
+    width: '46%',
+    height: 56,
+    borderRadius: 14,
     borderWidth: 2,
     borderBottomWidth: 4,
     overflow: 'hidden',
@@ -464,18 +604,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Spacing.sm,
+    paddingHorizontal: 6,
   },
   tileNum: {
     position: 'absolute',
-    top: 6,
-    left: 10,
-    fontSize: 12,
+    top: 4,
+    left: 8,
+    fontSize: 10,
     fontWeight: '600',
-    opacity: 0.4,
+    opacity: 0.5,
   },
   tileDisplay: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
     textAlign: 'center',
   },
@@ -484,6 +624,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.md,
     gap: Spacing.md,
+  },
+  decimalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.md,
+  },
+  decimalChip: {
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    minWidth: 64,
+  },
+  decimalDisplay: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  decimalValue: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   roundResult: { ...Font.h2 },
   nextBtn: {
@@ -496,6 +658,35 @@ const styles = StyleSheet.create({
   nextText: { fontSize: 28, color: '#FFF', fontWeight: '700' },
 
   footer: { height: Spacing.xl },
+
+  estimateDisplay: { ...Font.body, textAlign: 'center', marginBottom: Spacing.sm, paddingHorizontal: Spacing.md },
+  estimateGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  estimateOption: {
+    width: '46%',
+    height: 56,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderBottomWidth: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  estimateOptionNum: {
+    position: 'absolute',
+    top: 4,
+    left: 8,
+    fontSize: 10,
+    fontWeight: '600',
+    opacity: 0.5,
+  },
+  estimateOptionText: { fontSize: 18, fontWeight: '800' },
 
   gameOverTitle: { ...Font.h1, marginBottom: Spacing.md },
   stat: { ...Font.h2, marginBottom: Spacing.xl },

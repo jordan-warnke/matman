@@ -121,12 +121,14 @@ export interface GlobalSettings {
   theme: 'light' | 'dark' | 'work' | 'system';
   timed: boolean;
   multipleChoice: boolean;
+  smartSense: boolean;
 }
 
 export const DEFAULT_GLOBAL: GlobalSettings = {
   theme: 'system',
   timed: false,
   multipleChoice: false,
+  smartSense: false,
 };
 
 // ── Per-mode settings ──────────────────────────────────────
@@ -138,7 +140,7 @@ export interface ModeSettings {
   operationType: 'multiply' | 'squares' | 'cubes';
   questionStyle: 'standard' | 'reverse' | 'mix';
   timeAttackSeconds: number;
-  anchor: number | null;
+  anchor: number | number[] | null;
   problemCount: number;
   timed: boolean;
   excludedNumbers: number[];
@@ -166,7 +168,16 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
   shuffleOrder: false,
   maxNumerator: null,
   maxDenominator: null,
-  gauntletCategories: ['identities', 'exponents', 'quadratics', 'inequalities'],
+  gauntletCategories: [
+    'Difference of Squares', 'Binomial Squares', 'Sum of Squares Trap',
+    'Perfect Square Recognition', 'Spot the Identity', 'Sum & Difference of Cubes',
+    'Exponent Rules', 'Fraction Split',
+    'Factoring by Grouping', 'Quadratic Discriminant', 'Algebraic Manipulation',
+    'Function Notation', 'Quadratic Shortcuts',
+    'Absolute Value', 'Inequalities',
+    'Linear Equations', 'Systems of Equations', 'Number Properties',
+    'Rates & Work', 'Percent & Profit', 'Sequences & Series',
+  ],
   factoringCategories: ['diff-squares', 'perfect-sq', 'trinomials', 'gcf', 'leading-coeff', 'cubes'],
   operandMode: '3x1' as const,
 };
@@ -174,13 +185,25 @@ export const DEFAULT_MODE_SETTINGS: ModeSettings = {
 export function sanitizeModeSettings(settings: ModeSettings): ModeSettings {
   const maxNumber = clamp(settings.maxNumber, 1, 25);
   const minNumber = clamp(settings.minNumber, 1, maxNumber);
-  const anchor = settings.anchor == null ? null : clamp(settings.anchor, 1, 25);
+  const anchor = settings.anchor == null
+    ? null
+    : Array.isArray(settings.anchor)
+      ? settings.anchor.map((n) => clamp(n, 1, 25)).filter((n, i, a) => a.indexOf(n) === i)
+      : clamp(settings.anchor, 1, 25);
+  // Normalise to null if empty array
+  const normalizedAnchor = Array.isArray(anchor) && anchor.length === 0 ? null
+    : Array.isArray(anchor) && anchor.length === 1 ? anchor[0]
+    : anchor;
+
+  const anchorSet = new Set(
+    normalizedAnchor == null ? [] : Array.isArray(normalizedAnchor) ? normalizedAnchor : [normalizedAnchor],
+  );
 
   const excludedNumbers = [...new Set(settings.excludedNumbers ?? [])]
     .filter((n) => Number.isInteger(n) && n >= 1 && n <= 13)
     .sort((a, b) => a - b);
 
-  const sanitizedExcluded = excludedNumbers.filter((n) => n !== anchor);
+  const sanitizedExcluded = excludedNumbers.filter((n) => !anchorSet.has(n));
   const activeRange = new Set<number>();
   for (let n = minNumber; n <= maxNumber; n++) activeRange.add(n);
 
@@ -193,7 +216,7 @@ export function sanitizeModeSettings(settings: ModeSettings): ModeSettings {
     ...settings,
     maxNumber,
     minNumber,
-    anchor,
+    anchor: normalizedAnchor,
     excludedNumbers: sanitizedExcluded,
     excludeSquarePairs: !!settings.excludeSquarePairs,
   };
@@ -206,14 +229,14 @@ export type GameType =
   | 'cyclicity-drill'
   | 'arith-survival' | 'arith-free-form'
   | 'primes-time-attack' | 'primes-free-form'
-  | 'bound-time-attack' | 'bound-free-form'
   | 'parity-drill' | 'sign-drill'
   | 'algebra-drill' | 'wordprob-drill' | 'gauntlet-drill' | 'factoring-drill'
   | 'estimation-drill'
   | 'datastats-drill' | 'di-drill'
   | 'verbal-drill'
   | 'longdiv-drill'
-  | 'numbersense-drill';
+  | 'numbersense-drill'
+  | 'primefactor-drill';
 
 // ── helpers ────────────────────────────────────────────────
 
@@ -253,6 +276,37 @@ export async function recordByKey(
     lastWrong: isCorrect ? prev.lastWrong : Date.now(),
   };
 
+  await storageSetItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+/** Clear lastWrong for a key after retry-queue graduation. */
+export async function clearLastWrong(key: string): Promise<void> {
+  const history = await loadHistory();
+  const rec = history[key];
+  if (!rec || rec.lastWrong == null) return;
+  history[key] = { ...rec, lastWrong: undefined };
+  await storageSetItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+/** Dismiss a review item by resetting lastSeen to now.
+ *  This drops the weight to ~0.05 and isDue to false without deleting history.
+ *  The item will resurface naturally via the SRS schedule. */
+export async function dismissReview(key: string): Promise<void> {
+  const history = await loadHistory();
+  const rec = history[key];
+  if (!rec) return;
+  history[key] = { ...rec, lastSeen: Date.now() };
+  await storageSetItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+/** Clear all pending reviews by resetting lastSeen to now for every record.
+ *  Non-destructive: items re-enter review naturally via the SRS schedule. */
+export async function clearAllReviews(): Promise<void> {
+  const history = await loadHistory();
+  const now = Date.now();
+  for (const key of Object.keys(history)) {
+    history[key] = { ...history[key], lastSeen: now };
+  }
   await storageSetItem(HISTORY_KEY, JSON.stringify(history));
 }
 

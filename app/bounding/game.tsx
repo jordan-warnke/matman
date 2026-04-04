@@ -9,19 +9,19 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import NumberLine from '../../components/NumberLine';
 import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { BoundingProblem, BoundOp, generateBoundingProblem } from '../../data/bounding';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
-    ankiWeight,
     DEFAULT_MODE_SETTINGS,
     GameType,
-    History,
-    loadHistory,
     loadModeSettings,
     ModeSettings,
     recordByKey,
@@ -39,12 +39,11 @@ export default function BoundingGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
+  const selector = useRetrySelector({ generate: generateBoundingProblem, candidateCount: 12 });
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       setReady(true);
     });
   }, [gameType]);
@@ -60,7 +59,6 @@ export default function BoundingGameScreen() {
   const [userAnswer, setUserAnswer] = useState<BoundOp | null>(null);
   const { peekVisible, peekUsed, showPeek, hidePeek, togglePeek, resetPeek, panHandlers } = useInlinePeek();
 
-  const recentRef = useRef<string[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
   const pausedRef = useRef(false);
@@ -76,25 +74,8 @@ export default function BoundingGameScreen() {
   }, [scaleAnim]);
 
   const generateWeighted = useCallback((): BoundingProblem => {
-    // Generate a batch and pick the one with highest ankiWeight
-    const candidates = Array.from({ length: 8 }, () => generateBoundingProblem());
-    const history = historyRef.current;
-    const recent = new Set(recentRef.current);
-
-    // Filter out recently-seen problems, but keep at least 1
-    const eligible = candidates.filter(c => !recent.has(c.historyKey));
-    const pool = eligible.length > 0 ? eligible : candidates;
-
-    let best = pool[0];
-    let bestW = -1;
-    for (const c of pool) {
-      let w = ankiWeight(history[c.historyKey]) * (0.5 + Math.random());
-      if (w > bestW) { bestW = w; best = c; }
-    }
-
-    recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
-    return best;
-  }, []);
+    return selector.next();
+  }, [selector]);
 
   const startProblemTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -163,7 +144,8 @@ export default function BoundingGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -212,14 +194,17 @@ export default function BoundingGameScreen() {
     if (timed) startProblemTimer();
   }, [timed, startProblemTimer, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
   const workFormula = problem
-    ? `${problem.display}  vs  ${problem.benchmark.toLocaleString()}`
+    ? `${problem.display}  vs  ${problem.benchmarkDisplay ?? problem.benchmark.toLocaleString()}`
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   useWebShortcuts(
     problem
@@ -303,6 +288,7 @@ export default function BoundingGameScreen() {
         { label: '>', onPress: () => answer('>') },
       ]}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={String(problem.answer)}
       peekValue={String(problem.answer)}
       peekVisible={peekVisible && feedback === 'none'}
@@ -332,24 +318,40 @@ export default function BoundingGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
+        <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
         <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
           <Text style={[styles.problemText, { color: feedbackColor }]}> 
-            {problem.display}  vs  {problem.benchmark.toLocaleString()}
+            {problem.display}  vs  {problem.benchmarkDisplay ?? problem.benchmark.toLocaleString()}
           </Text>
         </Animated.View>
-        {(feedback !== 'none' || peekVisible) && (
+        {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+        </TouchableOpacity>
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}
           >
             = {problem.answer}
           </Text>
+        )}
+        {feedback !== 'none' && (
+          <>
+            <NumberLine
+              value={problem.exactValue}
+              benchmark={problem.benchmark}
+              benchmarkDisplay={problem.benchmarkDisplay}
+              colors={colors}
+            />
+            <Text style={[styles.hintText, { color: colors.muted }]}>
+              {problem.hint}
+            </Text>
+          </>
         )}
       </View>
 
@@ -462,6 +464,7 @@ const styles = StyleSheet.create({
   },
   problemText: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
   inlineReveal: { fontSize: 27, fontWeight: '900', letterSpacing: -1, textAlign: 'center', marginTop: Spacing.xs },
+  hintText: { fontSize: 13, fontWeight: '500', textAlign: 'center', marginTop: Spacing.sm, paddingHorizontal: Spacing.md },
 
   btnRow: {
     flexDirection: 'row',

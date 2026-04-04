@@ -14,6 +14,8 @@ interface ThemeContextType {
   setTimed: (v: boolean) => void;
   multipleChoice: boolean;
   setMultipleChoice: (v: boolean) => void;
+  smartSense: boolean;
+  setSmartSense: (v: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -28,6 +30,8 @@ const ThemeContext = createContext<ThemeContextType>({
   setTimed: () => {},
   multipleChoice: false,
   setMultipleChoice: () => {},
+  smartSense: false,
+  setSmartSense: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -35,12 +39,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [workDark, setWorkDark] = useState(false);
   const [timed, setTimedState] = useState(false);
   const [multipleChoice, setMCState] = useState(false);
+  const [smartSense, setSSState] = useState(false);
 
   useEffect(() => {
     loadGlobalSettings().then((s) => {
       setThemeMode(s.theme === 'dark' ? 'dark' : s.theme === 'work' ? 'work' : 'light');
       setTimedState(!!s.timed);
       setMCState(!!s.multipleChoice);
+      setSSState(!!s.smartSense);
     });
   }, []);
 
@@ -59,6 +65,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     await saveGlobalSettings({ multipleChoice: v });
   }
 
+  async function setSmartSense(v: boolean) {
+    setSSState(v);
+    await saveGlobalSettings({ smartSense: v });
+  }
+
   const colors = themeMode === 'dark' ? Colors.dark : themeMode === 'work' ? (workDark ? Colors.workDark : Colors.work) : Colors.light;
   const isDark = themeMode === 'dark' || (themeMode === 'work' && workDark);
   const isWork = themeMode === 'work';
@@ -69,7 +80,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <ThemeContext.Provider value={{ colors, isDark, isWork, isWorkDark, themeMode, setThemeMode: setThemeModeAndSave, toggleWorkDark, timed, setTimed, multipleChoice, setMultipleChoice }}>
+    <ThemeContext.Provider value={{ colors, isDark, isWork, isWorkDark, themeMode, setThemeMode: setThemeModeAndSave, toggleWorkDark, timed, setTimed, multipleChoice, setMultipleChoice, smartSense, setSmartSense }}>
       {children}
     </ThemeContext.Provider>
   );

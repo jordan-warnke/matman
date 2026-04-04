@@ -13,11 +13,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
-
-function clamp(raw: string, lo: number, hi: number) {
-  const n = parseInt(raw, 10);
-  return isNaN(n) ? lo : Math.max(lo, Math.min(hi, n));
-}
 import { useTheme } from '../../contexts/ThemeContext';
 import {
     DEFAULT_MODE_SETTINGS,
@@ -26,6 +21,11 @@ import {
     ModeSettings,
     saveModeSettings,
 } from '../../store/HistoryStore';
+
+function clamp(raw: string, lo: number, hi: number) {
+  const n = parseInt(raw, 10);
+  return isNaN(n) ? lo : Math.max(lo, Math.min(hi, n));
+}
 
 const GAME_TYPE: GameType = 'arith-survival';
 const LONGDIV_TYPE: GameType = 'longdiv-drill';

@@ -2,6 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    Alert,
     Animated,
     StyleSheet,
     Text,
@@ -14,11 +15,13 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
 import { Problem, useProblemGenerator } from '../../hooks/useProblemGenerator';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     DEFAULT_MODE_SETTINGS,
+    dismissReview,
     GameType,
     loadModeSettings,
     ModeSettings,
@@ -93,7 +96,7 @@ function formatProblemPrompt(problem: Problem): string {
 
 export default function GameScreen() {
   const router = useRouter();
-  const { colors, timed, multipleChoice, isWork } = useTheme();
+  const { colors, timed, multipleChoice, isWork, smartSense } = useTheme();
   const { type } = useLocalSearchParams<{ type: string }>();
   const gameType: GameType = (type || 'time-attack') as GameType;
 
@@ -110,7 +113,7 @@ export default function GameScreen() {
   }, [gameType]);
 
   // ── problem generator ──
-  const { generate, record, reshuffleOptions } = useProblemGenerator(
+  const { generate, record, refreshHistory, reshuffleOptions } = useProblemGenerator(
     settings.maxNumber,
     settings.anchor,
     settings.minNumber,
@@ -119,6 +122,7 @@ export default function GameScreen() {
     settings.excludedNumbers,
     settings.excludeSquarePairs,
     settings.shuffleOrder,
+    smartSense,
   );
 
   // ── game state ──
@@ -370,9 +374,11 @@ export default function GameScreen() {
 
   // ── render helpers ──
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
     feedback === 'correct'
-      ? colors.correct
+      ? correctColor
       : feedback === 'wrong'
         ? colors.error
         : colors.text;
@@ -381,6 +387,7 @@ export default function GameScreen() {
   const workFormula = problem
     ? formatProblemPrompt(problem)
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   const completionAnswer = problem ? String(problem.answer) : '';
   useWebShortcuts(
@@ -466,6 +473,7 @@ export default function GameScreen() {
             onInputChange={!multipleChoice ? (v) => setInput(v) : undefined}
             onInputSubmit={!multipleChoice ? handleInputSubmit : undefined}
             feedbackState={feedback === 'none' ? null : feedback}
+            reviewCorrect={feedback === 'correct' && isReview}
             correctAnswer={String(problem.answer)}
             revealedAnswer={completionAnswer}
             peekValue={completionAnswer}
@@ -507,18 +515,21 @@ export default function GameScreen() {
 
             {/* Problem */}
             <View style={styles.problemArea}>
+              <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
               <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
                 <Text style={[styles.problemText, { color: feedbackColor }]}> 
                   {formatProblemPrompt(problem)}
                 </Text>
               </Animated.View>
-              {(feedback !== 'none' || peekVisible) && (
+              {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+              </TouchableOpacity>
+              {!isWork && (feedback !== 'none' || peekVisible) && (
                 <Text
                   style={[
                     styles.inlineReveal,
                     {
                       color: feedback !== 'none'
-                        ? colors.correct
+                        ? correctColor
                         : colors.primary,
                     },
                   ]}
@@ -528,11 +539,42 @@ export default function GameScreen() {
               )}
 
               {problem.resurfacing && (
-                <View style={[styles.reviewPill, { backgroundColor: colors.card, borderColor: colors.border }]}> 
+                <TouchableOpacity
+                  activeOpacity={problem.resurfacing === 'review' ? 0.6 : 1}
+                  onPress={() => {
+                    if (problem.resurfacing !== 'review') return;
+                    Alert.alert(
+                      'Dismiss review?',
+                      'This item will return to normal rotation.',
+                      [
+                        { text: 'Keep', style: 'cancel' },
+                        {
+                          text: 'Dismiss',
+                          style: 'destructive',
+                          onPress: async () => {
+                            const key = `${problem.a}x${problem.b}`;
+                            await dismissReview(key);
+                            await refreshHistory();
+                            // Advance to next problem
+                            const next = generate();
+                            setProblem(next);
+                            problemStartRef.current = Date.now();
+                            setInput('');
+                            setFeedback('none');
+                            setAwaitingNext(false);
+                            setSelectedOption(null);
+                            submittedRef.current = false;
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                  style={[styles.reviewPill, { backgroundColor: colors.card, borderColor: colors.border }]}
+                >
                   <Text style={[styles.reviewPillText, { color: colors.muted }]}>
-                    {problem.resurfacing === 'retry' ? '↺ Retry' : '↺ Review'}
+                    {problem.resurfacing === 'retry' ? '↺ Retry' : problem.resurfacing === 'scaffold' ? '🧱 Warm-up' : '↺ Review'}
                   </Text>
-                </View>
+                </TouchableOpacity>
               )}
             </View>
 
@@ -563,7 +605,7 @@ export default function GameScreen() {
                         style={[
                           styles.mcBtn,
                           { backgroundColor: colors.card, borderColor: colors.border },
-                          feedback === 'correct' && opt === problem.answer && { borderColor: colors.correct, backgroundColor: colors.background },
+                          feedback === 'correct' && opt === problem.answer && { borderColor: correctColor, backgroundColor: colors.background },
                           feedback === 'wrong' && opt === problem.answer && { borderColor: colors.error, backgroundColor: colors.background },
                         ]}
                         activeOpacity={0.7}

@@ -15,19 +15,13 @@ import {
 } from 'react-native';
 import { Font, Spacing } from '../constants/Theme';
 import { useTheme } from '../contexts/ThemeContext';
+import { ALGEBRA_CATEGORY_MAP, GAUNTLET_GROUPS, GauntletGroup } from '../data/algebra';
 import {
     GameType,
     ModeSettings,
     sanitizeModeSettings,
     saveModeSettings,
 } from '../store/HistoryStore';
-
-const GAUNTLET_GROUP_LABELS: Record<string, string> = {
-  identities: 'Identities',
-  exponents: 'Exponents',
-  quadratics: 'Quadratics',
-  inequalities: 'Inequalities',
-};
 
 const FACTORING_GROUP_LABELS: Record<string, string> = {
   'diff-squares': 'Diff. of Squares',
@@ -81,7 +75,11 @@ export default function GameSettingsModal({
         maxNumber: String(settings.maxNumber),
         minNumber: String(settings.minNumber),
         timeAttackSeconds: String(settings.timeAttackSeconds),
-        anchor: settings.anchor ? String(settings.anchor) : '',
+        anchor: settings.anchor
+          ? Array.isArray(settings.anchor)
+            ? settings.anchor.join(',')
+            : String(settings.anchor)
+          : '',
         problemCount: settings.problemCount ? String(settings.problemCount) : '',
         maxNumerator: settings.maxNumerator ? String(settings.maxNumerator) : '',
         maxDenominator: settings.maxDenominator ? String(settings.maxDenominator) : '',
@@ -124,8 +122,12 @@ export default function GameSettingsModal({
       update.timeAttackSeconds = clamp(drafts.timeAttackSeconds, 1, 60);
     }
     if (fields.anchor) {
-      const n = parseInt(drafts.anchor, 10);
-      update.anchor = isNaN(n) || n < 1 ? null : Math.min(n, maxRange.max);
+      const parsed = (drafts.anchor ?? '')
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n) && n >= 1)
+        .map((n) => Math.min(n, maxRange.max));
+      update.anchor = parsed.length === 0 ? null : parsed.length === 1 ? parsed[0] : parsed;
     }
     if (fields.problemCount) {
       const n = parseInt(drafts.problemCount, 10);
@@ -164,12 +166,11 @@ export default function GameSettingsModal({
                     <Text style={[styles.label, { color: colors.text }]}>Anchor number</Text>
                     <TextInput
                       style={[styles.input, { backgroundColor: colors.border, color: colors.text }]}
-                      keyboardType="number-pad"
-                      placeholder="off"
+                      keyboardType="default"
+                      placeholder="off (e.g. 12,13)"
                       placeholderTextColor={colors.muted}
                       value={drafts.anchor ?? ''}
                       onChangeText={(v) => setDrafts((d) => ({ ...d, anchor: v }))}
-                      maxLength={2}
                     />
                   </View>
                 )}
@@ -420,40 +421,53 @@ export default function GameSettingsModal({
                   </View>
                 )}
 
-                {fields.gauntletCategories && (
-                  <View style={{ gap: Spacing.xs }}>
-                    <Text style={[styles.label, { color: colors.text }]}>Categories</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                      {Object.entries(GAUNTLET_GROUP_LABELS).map(([key, label]) => {
-                        const active = (settings.gauntletCategories ?? []).includes(key);
-                        const isLast = active && (settings.gauntletCategories ?? []).length <= 1;
+                {fields.gauntletCategories && (() => {
+                  const allCats = settings.gauntletCategories ?? Object.keys(ALGEBRA_CATEGORY_MAP);
+                  const catSet = new Set(allCats);
+                  return (
+                    <View style={{ gap: Spacing.sm }}>
+                      <Text style={[styles.label, { color: colors.text }]}>Categories</Text>
+                      {(Object.entries(GAUNTLET_GROUPS) as [GauntletGroup, string][]).map(([gk, gl]) => {
+                        const groupCats = Object.entries(ALGEBRA_CATEGORY_MAP)
+                          .filter(([, v]) => v.group === gk).map(([k]) => k);
+                        const allOn = groupCats.every(c => catSet.has(c));
                         return (
-                          <TouchableOpacity
-                            key={key}
-                            style={{
-                              paddingHorizontal: 14,
-                              paddingVertical: 8,
-                              borderRadius: 10,
-                              backgroundColor: active ? colors.primary : colors.border,
-                              opacity: isLast ? 0.55 : 1,
-                            }}
-                            activeOpacity={0.7}
-                            disabled={isLast}
-                            onPress={() => {
-                              const current = settings.gauntletCategories ?? Object.keys(GAUNTLET_GROUP_LABELS);
-                              const next = active
-                                ? current.filter((g) => g !== key)
-                                : [...current, key];
-                              patch({ gauntletCategories: next });
-                            }}
-                          >
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#FFF' : colors.text }}>{label}</Text>
-                          </TouchableOpacity>
+                          <View key={gk} style={{ gap: 6 }}>
+                            <TouchableOpacity activeOpacity={0.7} onPress={() => {
+                              const cur = [...catSet];
+                              if (allOn) {
+                                const rest = cur.filter(c => !groupCats.includes(c));
+                                if (rest.length > 0) patch({ gauntletCategories: rest });
+                              } else {
+                                patch({ gauntletCategories: [...new Set([...cur, ...groupCats])] });
+                              }
+                            }}>
+                              <Text style={{ fontSize: 13, fontWeight: '800', color: allOn ? colors.primary : colors.muted }}>{gl}</Text>
+                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                              {groupCats.map(ck => {
+                                const info = ALGEBRA_CATEGORY_MAP[ck];
+                                const on = catSet.has(ck);
+                                const last = on && catSet.size <= 1;
+                                return (
+                                  <TouchableOpacity key={ck} disabled={last} activeOpacity={0.7}
+                                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+                                      backgroundColor: on ? colors.primary : colors.border, opacity: last ? 0.55 : 1 }}
+                                    onPress={() => {
+                                      const cur = [...catSet];
+                                      patch({ gauntletCategories: on ? cur.filter(c => c !== ck) : [...cur, ck] });
+                                    }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: on ? '#FFF' : colors.text }}>{info.label}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
                         );
                       })}
                     </View>
-                  </View>
-                )}
+                  );
+                })()}
 
                 {fields.factoringCategories && (
                   <View style={{ gap: Spacing.xs }}>

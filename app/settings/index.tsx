@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Font, Spacing } from '../../constants/Theme';
-import { DEFAULT_GLOBAL, GlobalSettings, loadGlobalSettings, resetAllProgress, saveGlobalSettings } from '../../store/HistoryStore';
+import { DEFAULT_GLOBAL, GlobalSettings, clearAllReviews, loadGlobalSettings, resetAllProgress, saveGlobalSettings } from '../../store/HistoryStore';
 
 const THEME_ORDER: GlobalSettings['theme'][] = ['system', 'light', 'dark'];
 
@@ -65,6 +65,39 @@ export default function SettingsScreen() {
             <Text style={styles.hint}>Resurfacing is now automatic. Review timing comes from recent accuracy and speed, not manual flags.</Text>
           </View>
         </View>
+
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>Smart Sense</Text>
+            <Text style={styles.hint}>Serve warm-up problems before difficult retries</Text>
+          </View>
+          <TouchableOpacity style={styles.chip} onPress={() => patch({ smartSense: !settings.smartSense })}>
+            <Text style={styles.chipText}>{settings.smartSense ? 'ON' : 'OFF'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={styles.row}
+          activeOpacity={0.7}
+          onPress={() =>
+            Alert.alert(
+              'Clear Review Queue',
+              'This postpones all pending reviews without deleting any history. Items will resurface naturally on their SRS schedule.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Clear',
+                  onPress: () => clearAllReviews(),
+                },
+              ],
+            )
+          }
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>Clear Review Queue</Text>
+            <Text style={styles.hint}>Postpone all pending reviews without deleting history</Text>
+          </View>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.row}

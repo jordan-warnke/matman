@@ -15,6 +15,7 @@ export const Colors = {
     teal: '#2EC4B6',
     tealDark: '#20A89C',
     correct: '#58CC02',
+    gold: '#DAA520',
     border: '#E5E5E5',
     card: '#F7F7F7',
     muted: '#AFAFAF',
@@ -35,6 +36,7 @@ export const Colors = {
     teal: '#2EC4B6',
     tealDark: '#20A89C',
     correct: '#58CC02',
+    gold: '#DAA520',
     border: '#3C4D54',
     card: '#1B2C33',
     muted: '#778D96',
@@ -55,6 +57,7 @@ export const Colors = {
     teal: '#4472C4',
     tealDark: '#2F5597',
     correct: '#548235',      // Excel green
+    gold: '#BF8F00',
     border: '#D6D6D6',
     card: '#F2F2F2',
     muted: '#A6A6A6',
@@ -75,6 +78,7 @@ export const Colors = {
     teal: '#569CD6',
     tealDark: '#4080B0',
     correct: '#6A9955',      // VS Code green
+    gold: '#DAA520',
     border: '#3C3C3C',
     card: '#252526',
     muted: '#808080',

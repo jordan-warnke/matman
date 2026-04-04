@@ -15,16 +15,15 @@ import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { AlgebraProblem, ALL_ALGEBRA_PROBLEMS, shuffleOptions } from '../../data/algebra';
-import { buildFactoringPool, FactoringProblem, shuffleFactoringOptions } from '../../data/factoring';
+import { buildFactoringPool, shuffleFactoringOptions } from '../../data/factoring';
 import { ALL_WORD_PROBLEMS, shuffleWordOptions, WordProblem } from '../../data/wordprob';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
-    ankiWeight,
     DEFAULT_MODE_SETTINGS,
     GameType,
-    History,
-    loadHistory,
     loadModeSettings,
     ModeSettings,
     recordByKey,
@@ -53,68 +52,44 @@ export default function AlgebraGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
-  const recentRef = useRef<string[]>([]);
+  const selector = useRetrySelector({
+    generate: (): Problem => {
+      if (isFactoring) {
+        const facPool = buildFactoringPool(settings.factoringCategories ?? []);
+        const item = facPool[Math.floor(Math.random() * facPool.length)];
+        return shuffleFactoringOptions(item);
+      }
+      let pool: (AlgebraProblem | WordProblem)[] = isAlgebra ? ALL_ALGEBRA_PROBLEMS : ALL_WORD_PROBLEMS;
+      if (gameType === 'gauntlet-drill') {
+        const stored = settings.gauntletCategories ?? [];
+        const oldGroups = ['identities', 'exponents', 'quadratics', 'inequalities'];
+        const isOldFormat = stored.length > 0 && stored.every(s => oldGroups.includes(s));
+        if (isOldFormat) {
+          const groups = new Set(stored);
+          pool = (pool as AlgebraProblem[]).filter(p => groups.has(p.group));
+        } else {
+          const cats = new Set(stored);
+          pool = (pool as AlgebraProblem[]).filter(p => cats.has(p.category));
+        }
+      }
+      const item = pool[Math.floor(Math.random() * pool.length)];
+      return isAlgebra
+        ? shuffleOptions(item as AlgebraProblem)
+        : shuffleWordOptions(item as WordProblem);
+    },
+    candidateCount: 50,
+  });
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       setReady(true);
     });
   }, [gameType]);
 
   const generate = useCallback((): Problem => {
-    const history = historyRef.current;
-
-    // Factoring drill: procedurally generated pool
-    if (isFactoring) {
-      const pool = buildFactoringPool(settings.factoringCategories ?? []);
-      const recent = new Set(recentRef.current);
-      const eligible = pool.filter(p => !recent.has(p.historyKey));
-      const candidates = eligible.length > 0 ? eligible : pool;
-      let best: FactoringProblem = candidates[0];
-      let bestW = -1;
-      for (const item of candidates) {
-        const w = ankiWeight(history[item.historyKey]) * (0.5 + Math.random());
-        if (w > bestW) { bestW = w; best = item; }
-      }
-      recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
-      return shuffleFactoringOptions(best);
-    }
-
-    let pool: (AlgebraProblem | WordProblem)[] = isAlgebra ? ALL_ALGEBRA_PROBLEMS : ALL_WORD_PROBLEMS;
-
-    // Gauntlet: filter by selected category groups
-    if (gameType === 'gauntlet-drill') {
-      const groups = new Set(settings.gauntletCategories ?? ['identities', 'exponents', 'quadratics', 'inequalities']);
-      pool = (pool as AlgebraProblem[]).filter(p => groups.has(p.group));
-    }
-
-    const recent = new Set(recentRef.current);
-
-    // Filter out recently-seen problems, but keep at least 1
-    const eligible = pool.filter(p => !recent.has(p.historyKey));
-    const candidates = eligible.length > 0 ? eligible : pool;
-
-    // Pick from candidates weighted by ankiWeight (with jitter)
-    let best: typeof candidates[0] = candidates[0];
-    let bestW = -1;
-    for (const item of candidates) {
-      const w = ankiWeight(history[item.historyKey]) * (0.5 + Math.random());
-      if (w > bestW) { bestW = w; best = item; }
-    }
-
-    // Track recent to prevent repeats
-    recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
-
-    // Shuffle options
-    const shuffled = isAlgebra
-      ? shuffleOptions(best as AlgebraProblem)
-      : shuffleWordOptions(best as WordProblem);
-
-    return shuffled;
-  }, [isAlgebra, isFactoring, gameType, settings.gauntletCategories, settings.factoringCategories]);
+    return selector.next();
+  }, [selector]);
 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
@@ -208,7 +183,8 @@ export default function AlgebraGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -276,14 +252,17 @@ export default function AlgebraGameScreen() {
     if (timed) startProblemTimer();
   }, [timed, startProblemTimer, problem, isAlgebra, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
   const workFormula = problem
-    ? problem.display
+    ? (problem.question ? `${problem.display}  ·  ${problem.question}` : problem.display)
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   useWebShortcuts(
     problem
@@ -364,6 +343,7 @@ export default function AlgebraGameScreen() {
         onPress: () => answer(opt),
       }))}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={String(problem.answer)}
       peekValue={String(problem.answer)}
       peekVisible={peekVisible && feedback === 'none'}
@@ -394,21 +374,24 @@ export default function AlgebraGameScreen() {
       {/* Problem */}
       <View style={styles.problemArea}>
         <View style={styles.promptBlock}>
+          <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
           <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
             <MathText text={problem.display} style={[styles.displayText, { color: feedbackColor }]} />
             <Text style={[styles.questionText, { color: colors.text }]}> 
               {problem.question}
             </Text>
           </Animated.View>
+          {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+          </TouchableOpacity>
         </View>
-        {(feedback !== 'none' || peekVisible) && (
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <MathText
             text={`= ${problem.answer}`}
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}
@@ -426,7 +409,7 @@ export default function AlgebraGameScreen() {
 
           if (feedback !== 'none') {
             if (isCorrectOption) {
-              optStyle = { backgroundColor: colors.correct, borderColor: colors.correct };
+              optStyle = { backgroundColor: correctColor, borderColor: correctColor };
               textColor = '#FFF';
             } else if (isSelected) {
               optStyle = { backgroundColor: colors.error + '22', borderColor: colors.error };

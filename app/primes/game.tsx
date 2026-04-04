@@ -14,14 +14,13 @@ import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatFactorization, isPrime, TRAP_NUMBERS } from '../../data/primes';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
-    ankiWeight,
     DEFAULT_MODE_SETTINGS,
     GameType,
-    History,
-    loadHistory,
     loadModeSettings,
     ModeSettings,
     recordByKey,
@@ -38,34 +37,38 @@ interface PrimeProblem {
   isTrap: boolean;
 }
 
-function buildPool(history: History, maxN: number) {
-  const primes: { n: number; weight: number }[] = [];
-  const composites: { n: number; weight: number }[] = [];
-
-  // Skip trivially easy small numbers — start at 11 for a real challenge
+function generatePrimeProblem(maxN: number): PrimeProblem {
   const minN = 11;
-
+  // 55/45 prime vs composite split
+  const wantPrime = Math.random() < 0.55;
+  const candidates: number[] = [];
   for (let n = minN; n <= maxN; n++) {
-    const key = `prime:${n}`;
-    const isTrap = TRAP_NUMBERS.includes(n);
-    let w = ankiWeight(history[key]);
-    if (isTrap) w *= 2.5; // trap numbers get a strong boost
-
-    if (isPrime(n)) {
-      // Boost primes above 50 — these are the GMAT-relevant ones
-      if (n > 50) w *= 1.5;
-      primes.push({ n, weight: w });
-    } else {
-      // Aggressively down-weight obviously composite numbers
-      if (n % 2 === 0) w *= 0.08;        // even → almost never
-      else if (n % 5 === 0) w *= 0.15;    // mult of 5 → rarely
-      else if (n % 3 === 0 && !isTrap) w *= 0.3; // mult of 3 (non-trap) → low
-      composites.push({ n, weight: w });
-    }
+    if (wantPrime === isPrime(n)) candidates.push(n);
   }
+  // Fallback if somehow empty
+  if (candidates.length === 0) {
+    for (let n = minN; n <= maxN; n++) candidates.push(n);
+  }
+  const n = candidates[Math.floor(Math.random() * candidates.length)];
+  const prime = isPrime(n);
+  return {
+    n,
+    prime,
+    factorization: prime ? `${n} is prime` : formatFactorization(n),
+    historyKey: `prime:${n}`,
+    isTrap: TRAP_NUMBERS.includes(n),
+  };
+}
 
-  // Pick from primes ~55% of the time — keeps user diligent
-  return Math.random() < 0.55 ? primes : composites;
+function primeWeightModifier(item: PrimeProblem): number {
+  if (item.isTrap) return 2.5;
+  if (item.prime && item.n > 50) return 1.5;
+  if (!item.prime) {
+    if (item.n % 2 === 0) return 0.08;
+    if (item.n % 5 === 0) return 0.15;
+    if (item.n % 3 === 0) return 0.3;
+  }
+  return 1;
 }
 
 export default function PrimesGameScreen() {
@@ -77,13 +80,17 @@ export default function PrimesGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
   const maxN = useRef(200);
 
+  const selector = useRetrySelector({
+    generate: () => generatePrimeProblem(maxN.current),
+    candidateCount: 12,
+    weightModifier: primeWeightModifier,
+  });
+
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       maxN.current = s.maxNumber > 13 ? s.maxNumber : 400;
       setReady(true);
     });
@@ -111,23 +118,8 @@ export default function PrimesGameScreen() {
   const advanceReadyRef = useRef(0);
 
   const generate = useCallback((): PrimeProblem => {
-    const pool = buildPool(historyRef.current, maxN.current);
-    const totalWeight = pool.reduce((s, p) => s + p.weight, 0);
-    let rand = Math.random() * totalWeight;
-    let chosen = pool[0];
-    for (const p of pool) {
-      rand -= p.weight;
-      if (rand <= 0) { chosen = p; break; }
-    }
-    const prime = isPrime(chosen.n);
-    return {
-      n: chosen.n,
-      prime,
-      factorization: prime ? `${chosen.n} is prime` : formatFactorization(chosen.n),
-      historyKey: `prime:${chosen.n}`,
-      isTrap: TRAP_NUMBERS.includes(chosen.n),
-    };
-  }, []);
+    return selector.next();
+  }, [selector]);
 
   const popIn = useCallback(() => {
     scaleAnim.setValue(0.8);
@@ -208,7 +200,8 @@ export default function PrimesGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       setUserAnswer(userSaidPrime);
@@ -264,14 +257,17 @@ export default function PrimesGameScreen() {
     if (timed) startProblemTimer();
   }, [timed, startProblemTimer, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
   const workFormula = problem
     ? String(problem.n)
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   useWebShortcuts(
     problem
@@ -356,6 +352,7 @@ export default function PrimesGameScreen() {
         { label: 'FALSE', onPress: () => answer(false) },
       ]}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={problem.prime ? 'Prime' : 'Composite'}
       peekValue={problem.prime ? 'Prime' : 'Composite'}
       peekVisible={peekVisible && feedback === 'none'}
@@ -385,18 +382,21 @@ export default function PrimesGameScreen() {
 
       {/* Number display */}
       <View style={styles.problemArea}>
+        <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
         <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
           <Text style={[styles.numberText, { color: feedbackColor }]}> 
             {problem.n}
           </Text>
         </Animated.View>
-        {(feedback !== 'none' || peekVisible) && (
+        {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+        </TouchableOpacity>
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}

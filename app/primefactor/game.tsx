@@ -13,45 +13,49 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
-import {
-    CyclicityProblem,
-    generateCyclicityProblem,
-    shuffleOptions,
-} from '../../data/cyclicity';
+import { generatePFProblem, PFProblem, regeneratePFOptions } from '../../data/primefactor';
 import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
     DEFAULT_MODE_SETTINGS,
-    History,
-    loadHistory,
+    GameType,
     loadModeSettings,
     ModeSettings,
-    recordByKey
+    recordByKey,
 } from '../../store/HistoryStore';
 
 type Feedback = 'none' | 'correct' | 'wrong';
 
-export default function CyclicityGameScreen() {
+export default function PrimeFactorGameScreen() {
   const router = useRouter();
   const { colors, timed, isWork } = useTheme();
+  const gameType: GameType = 'primefactor-drill';
 
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
-  const historyRef = useRef<History>({});
+
+  const maxN = useRef(200);
+
+  const selector = useRetrySelector({
+    generate: () => generatePFProblem(maxN.current),
+    candidateCount: 12,
+  });
 
   useEffect(() => {
-    Promise.all([
-      loadModeSettings('cyclicity-drill'),
-      loadHistory(),
-    ]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
+      maxN.current = s.maxNumber > 13 ? s.maxNumber : 200;
       setReady(true);
     });
-  }, []);
+  }, [gameType]);
 
-  const [problem, setProblem] = useState<CyclicityProblem | null>(null);
+  const generate = useCallback((): PFProblem => {
+    return selector.next();
+  }, [selector]);
+
+  const [problem, setProblem] = useState<PFProblem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
   const [streak, setStreak] = useState(0);
   const [answered, setAnswered] = useState(0);
@@ -65,14 +69,19 @@ export default function CyclicityGameScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const problemStartRef = useRef(0);
   const pausedRef = useRef(false);
-  const shakeAnim = useRef(new Animated.Value(0)).current;
   const submittedRef = useRef(false);
   const graceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceReadyRef = useRef(0);
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  const generate = useCallback((): CyclicityProblem => {
-    return generateCyclicityProblem(settings.minNumber || 2, settings.maxNumber || 9);
-  }, [settings.minNumber, settings.maxNumber]);
+  const modeColor = colors.error;
+  const modeColorDark = colors.errorDark;
+
+  const popIn = useCallback(() => {
+    scaleAnim.setValue(0.8);
+    Animated.spring(scaleAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+  }, [scaleAnim]);
 
   const startProblemTimer = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -125,14 +134,14 @@ export default function CyclicityGameScreen() {
     ]).start();
   }, [shakeAnim]);
 
-  const submit = useCallback(
-    async (value: string) => {
+  const answer = useCallback(
+    async (userChoice: string) => {
       if (!problem || feedback !== 'none' || gameOver) return;
       if (submittedRef.current) return;
       submittedRef.current = true;
-      setSelectedOption(value);
+      setSelectedOption(userChoice);
       const elapsed = Date.now() - problemStartRef.current;
-      const isCorrect = value === problem.answer;
+      const isCorrect = userChoice === problem.answer;
 
       pausedRef.current = true;
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -141,7 +150,8 @@ export default function CyclicityGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -155,6 +165,7 @@ export default function CyclicityGameScreen() {
         setStreak(0);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
+
       advanceReadyRef.current = Date.now() + 500;
       setAwaitingNext(true);
     },
@@ -175,13 +186,14 @@ export default function CyclicityGameScreen() {
     setSelectedOption(null);
     resetPeek();
     submittedRef.current = false;
+    popIn();
     if (timed) startProblemTimer();
-  }, [generate, answered, settings.problemCount, timed, startProblemTimer, resetPeek]);
+  }, [generate, answered, settings.problemCount, timed, startProblemTimer, popIn, resetPeek]);
 
   const repeatQuestion = useCallback(() => {
     if (problem) {
-      const prevIdx = problem.options.indexOf(problem.answer);
-      setProblem(shuffleOptions(problem, prevIdx));
+      const reshuffled = regeneratePFOptions(problem);
+      setProblem(reshuffled);
     }
     setFeedback('none');
     setAwaitingNext(false);
@@ -199,15 +211,15 @@ export default function CyclicityGameScreen() {
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
-  const workFormula = problem ? `${problem.display} → ?` : '';
+  const workFormula = problem ? `Factor(${problem.number})` : '';
   const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   useWebShortcuts(
     problem
-      ? problem.options.map(opt =>
+      ? problem.options.map((opt) =>
           feedback !== 'none' && opt === problem.answer ? advanceNext
-          : feedback !== 'none' ? null
-          : () => submit(opt))
+            : feedback !== 'none' ? null
+              : () => answer(opt))
       : [],
     awaitingNext ? advanceNext : undefined,
     undefined,
@@ -236,6 +248,7 @@ export default function CyclicityGameScreen() {
       setStreak(0);
       setFeedback('none');
       setAwaitingNext(false);
+      setSelectedOption(null);
       resetPeek();
       submittedRef.current = false;
       const p = generate();
@@ -251,7 +264,7 @@ export default function CyclicityGameScreen() {
             {pct}% · {correctCount}/{answered} correct
           </Text>
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: colors.primary, borderBottomColor: colors.primaryDark }]}
+            style={[styles.primaryBtn, { backgroundColor: modeColor, borderBottomColor: modeColorDark }]}
             activeOpacity={0.85}
             onPress={playAgain}
           >
@@ -262,7 +275,7 @@ export default function CyclicityGameScreen() {
             activeOpacity={0.7}
             onPress={() => router.back()}
           >
-            <Text style={[styles.secondaryBtnText, { color: colors.muted }]}>Back to Modes</Text>
+            <Text style={[styles.secondaryBtnText, { color: colors.muted }]}>Back to Menu</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -271,116 +284,134 @@ export default function CyclicityGameScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} {...panHandlers}>
-    <SpreadsheetChrome
-      panHandlers={panHandlers}
-      formula={workFormula}
-      cellRef="E3"
-      options={problem.options.map((opt) => ({
-        label: opt,
-        onPress: () => submit(opt),
-      }))}
-      feedbackState={feedback === 'none' ? null : feedback}
-      reviewCorrect={feedback === 'correct' && isReview}
-      correctAnswer={problem.answer}
-      peekValue={problem.answer}
-      peekVisible={peekVisible && feedback === 'none'}
-      selectedValue={selectedOption ?? undefined}
-      onBack={() => router.back()}
-      onNext={awaitingNext ? advanceNext : undefined}
-      onRepeat={awaitingNext ? repeatQuestion : undefined}
-      onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.back, { color: colors.primary }]}>←</Text>
-        </TouchableOpacity>
-        {timed && (
-          <View style={[styles.timerPill, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.timerText, { color: colors.text }, timer <= 3 && { color: colors.error }]}>
-              {timer.toFixed(1)}s
-            </Text>
+      <SpreadsheetChrome
+        panHandlers={panHandlers}
+        formula={workFormula}
+        cellRef="B7"
+        options={problem.options.map((opt) => ({
+          label: opt,
+          onPress: () => answer(opt),
+        }))}
+        feedbackState={feedback === 'none' ? null : feedback}
+        reviewCorrect={feedback === 'correct' && isReview}
+        correctAnswer={problem.answer}
+        peekValue={problem.answer}
+        peekVisible={peekVisible && feedback === 'none'}
+        selectedValue={selectedOption ?? undefined}
+        onBack={() => router.back()}
+        onNext={awaitingNext ? advanceNext : undefined}
+        onRepeat={awaitingNext ? repeatQuestion : undefined}
+        onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Text style={[styles.back, { color: modeColor }]}>←</Text>
+          </TouchableOpacity>
+          {timed && (
+            <View style={[styles.timerPill, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.timerText, { color: colors.text }, timer <= 3 && { color: colors.error }]}>
+                {timer.toFixed(1)}s
+              </Text>
+            </View>
+          )}
+          <View style={styles.streakBox}>
+            <Text style={[styles.streakNum, { color: modeColor }]}>{streak}</Text>
+            <Text style={styles.streakLabel}>🔥</Text>
           </View>
-        )}
-        <View style={styles.streakBox}>
-          <Text style={[styles.streakNum, { color: colors.accent }]}>{streak}</Text>
-          <Text style={styles.streakLabel}>🔥</Text>
         </View>
-      </View>
 
-      {/* Problem */}
-      <View style={styles.problemArea}>
-        <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
-        <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-          <Text style={[styles.problemText, { color: feedbackColor }]}>
-            {problem.display}
-          </Text>
-        </Animated.View>
-        {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
-        </TouchableOpacity>
-        {!isWork && (feedback !== 'none' || peekVisible) && (
-          <Text
-            style={[
-              styles.inlineReveal,
-              {
-                color: feedback !== 'none'
-                  ? correctColor
-                  : colors.primary,
-              },
-            ]}
-          >
-            = {problem.answer}
-          </Text>
-        )}
-        <Text style={[styles.questionText, { color: colors.muted }]}>
-          {problem.question}
-        </Text>
-      </View>
-
-      {/* MC Options */}
-      <View style={styles.answerArea}>
-        <View style={styles.mcGrid}>
-          {problem.options.map((opt, i) => (
-            <TouchableOpacity
-              key={`${opt}-${i}`}
+        <View style={styles.problemArea}>
+          <View style={styles.problemInlineRow}>
+            <View style={styles.promptBlock}>
+              <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
+              <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
+                <Text style={[styles.displayText, { color: feedbackColor }]}>
+                  {problem.number}
+                </Text>
+                <Text style={[styles.questionText, { color: colors.text }]}>
+                  Prime factorize
+                </Text>
+              </Animated.View>
+              {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+          {!isWork && (feedback !== 'none' || peekVisible) && (
+            <Text
               style={[
-                styles.mcBtn,
-                { backgroundColor: colors.card, borderColor: colors.border },
-                feedback === 'correct' && opt === problem.answer && { borderColor: correctColor, backgroundColor: colors.background },
-                feedback === 'wrong' && opt === problem.answer && { borderColor: colors.error, backgroundColor: colors.background },
+                styles.inlineReveal,
+                { color: feedback !== 'none' ? correctColor : colors.primary },
               ]}
-              activeOpacity={0.7}
-              onPress={feedback !== 'none' && opt === problem.answer ? advanceNext : () => submit(opt)}
-              disabled={feedback !== 'none' && opt !== problem.answer}
             >
-              <Text style={[styles.mcText, { color: colors.text }]}>{opt}</Text>
-            </TouchableOpacity>
-          ))}
+              {problem.answer}
+            </Text>
+          )}
+          {feedback !== 'none' && (
+            <Text style={[styles.hintText, { color: colors.muted }]}>
+              {problem.category} · {problem.hint}
+            </Text>
+          )}
         </View>
-        {awaitingNext && (
-          <View style={styles.navRow}>
-            <TouchableOpacity
-              style={[styles.repeatBtn, { borderColor: colors.border }]}
-              activeOpacity={0.7}
-              onPress={repeatQuestion}
-            >
-              <Text style={[styles.repeatText, { color: colors.muted }]}>↺</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.nextBtn, { flex: 1, backgroundColor: colors.primary, borderBottomColor: colors.primaryDark }]}
-              activeOpacity={0.85}
-              onPress={advanceNext}
-            >
-              <Text style={styles.nextText}>→</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
 
-      <View style={styles.footer}>
-        <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
-      </View>
-    </SpreadsheetChrome>
+        {/* MC options */}
+        <View style={styles.optionsArea}>
+          {problem.options.map((option, i) => {
+            const isSelected = selectedOption === option;
+            const isCorrectOption = option === problem.answer;
+            let optStyle: any = { backgroundColor: colors.card, borderColor: colors.border };
+            let textColor: string = colors.text;
+
+            if (feedback !== 'none') {
+              if (isCorrectOption) {
+                optStyle = { backgroundColor: correctColor, borderColor: correctColor };
+                textColor = '#FFF';
+              } else if (isSelected) {
+                optStyle = { backgroundColor: colors.error + '22', borderColor: colors.error };
+                textColor = colors.error;
+              } else {
+                optStyle = { ...optStyle, opacity: 0.4 };
+              }
+            }
+
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[styles.optionBtn, optStyle]}
+                activeOpacity={0.7}
+                onPress={feedback !== 'none' && isCorrectOption ? advanceNext : () => answer(option)}
+                disabled={feedback !== 'none' && !isCorrectOption}
+              >
+                <Text style={[styles.optionText, { color: textColor }]} numberOfLines={2}>
+                  {option}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          {awaitingNext && (
+            <View style={styles.navRow}>
+              <TouchableOpacity
+                style={[styles.repeatBtn, { borderColor: colors.border }]}
+                activeOpacity={0.7}
+                onPress={repeatQuestion}
+              >
+                <Text style={[styles.repeatText, { color: colors.muted }]}>↺</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.nextBtn, { flex: 1, backgroundColor: modeColor, borderBottomColor: modeColorDark }]}
+                activeOpacity={0.85}
+                onPress={advanceNext}
+              >
+                <Text style={styles.nextText}>→</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.footer}>
+          <PeekHint onPeek={!awaitingNext && feedback === 'none' ? togglePeek : undefined} />
+        </View>
+      </SpreadsheetChrome>
     </SafeAreaView>
   );
 }
@@ -415,36 +446,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,
   },
-  problemText: { fontSize: 48, fontWeight: '900', letterSpacing: -1 },
-  questionText: { ...Font.h3, marginTop: Spacing.sm, color: '#888' },
-  inlineReveal: { fontSize: 41, fontWeight: '900', letterSpacing: -1, textAlign: 'center', marginTop: Spacing.xs },
-
-  answerArea: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.lg },
-
-  mcGrid: {
+  problemInlineRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
+    alignItems: 'baseline',
     justifyContent: 'center',
+    gap: Spacing.md,
   },
-  mcBtn: {
-    width: '47%',
-    paddingVertical: 18,
+  promptBlock: {
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  categoryLabel: { ...Font.caption, marginBottom: Spacing.sm, textAlign: 'center' },
+  displayText: { fontSize: 48, fontWeight: '900', textAlign: 'center', marginBottom: Spacing.md },
+  questionText: { ...Font.h3, textAlign: 'center', marginBottom: Spacing.sm },
+  inlineReveal: { fontSize: 26, fontWeight: '900', textAlign: 'center', marginTop: Spacing.xs },
+  hintText: { ...Font.body, textAlign: 'center', marginTop: Spacing.md, paddingHorizontal: Spacing.md },
+
+  optionsArea: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  optionBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: Spacing.lg,
     borderRadius: 16,
     borderWidth: 2,
+    borderBottomWidth: 4,
     alignItems: 'center',
-    borderBottomWidth: 5,
   },
-  mcText: { ...Font.h3 },
+  optionText: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
 
-  navRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
   nextBtn: {
-    borderRadius: 16,
-    paddingVertical: 18,
+    borderRadius: 20,
+    paddingVertical: 22,
     alignItems: 'center',
-    borderBottomWidth: 5,
+    borderBottomWidth: 6,
   },
   nextText: { fontSize: 28, color: '#FFF', fontWeight: '700' },
+
+  navRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
   repeatBtn: { borderRadius: 16, paddingVertical: 14, paddingHorizontal: 20, borderWidth: 2, borderBottomWidth: 4 },
   repeatText: { fontSize: 24, fontWeight: '700' },
 
@@ -463,9 +508,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     borderBottomWidth: 5,
-    marginBottom: Spacing.md,
   },
-  primaryBtnText: { ...Font.h3, color: '#FFF', fontWeight: '700' },
-  secondaryBtn: { paddingVertical: Spacing.sm },
-  secondaryBtnText: { ...Font.body },
+  primaryBtnText: { ...Font.h3, color: '#FFF' },
+  secondaryBtn: { marginTop: Spacing.md, paddingVertical: 12 },
+  secondaryBtnText: { ...Font.body, fontWeight: '600' },
 });

@@ -14,6 +14,7 @@ import PeekHint from '../../components/PeekHint';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
 import { LDProblem, useLongDivGenerator } from '../../hooks/useLongDivGenerator';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
@@ -312,12 +313,15 @@ export default function LongDivGameScreen() {
   }, [timed, startProblemTimer, problem, reshuffleOptions, resetSelectedOptionAnimation, resetPeek]);
 
   // ── render helpers ──
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
     : feedback === 'wrong' ? colors.error
     : colors.text;
 
   const workFormula = problem ? formatProblemPrompt(problem) : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
   const completionAnswer = problem ? String(problem.answer) : '';
 
   useWebShortcuts(
@@ -399,6 +403,7 @@ export default function LongDivGameScreen() {
         onInputChange={!multipleChoice ? (v) => setInput(v) : undefined}
         onInputSubmit={!multipleChoice ? handleInputSubmit : undefined}
         feedbackState={feedback === 'none' ? null : feedback}
+        reviewCorrect={feedback === 'correct' && isReview}
         correctAnswer={String(problem.answer)}
         revealedAnswer={completionAnswer}
         peekValue={completionAnswer}
@@ -440,16 +445,19 @@ export default function LongDivGameScreen() {
 
         {/* Problem */}
         <View style={styles.problemArea}>
+          <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
           <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
             <Text style={[styles.problemText, { color: feedbackColor }]}>
               {formatProblemPrompt(problem)}
             </Text>
           </Animated.View>
-          {(feedback !== 'none' || peekVisible) && (
+          {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+          </TouchableOpacity>
+          {!isWork && (feedback !== 'none' || peekVisible) && (
             <Text
               style={[
                 styles.inlineReveal,
-                { color: feedback !== 'none' ? colors.correct : colors.primary },
+                { color: feedback !== 'none' ? correctColor : colors.primary },
               ]}
             >
               = {completionAnswer}
@@ -492,7 +500,7 @@ export default function LongDivGameScreen() {
                       style={[
                         styles.mcBtn,
                         { backgroundColor: colors.card, borderColor: colors.border },
-                        feedback === 'correct' && opt === problem.answer && { borderColor: colors.correct, backgroundColor: colors.background },
+                        feedback === 'correct' && opt === problem.answer && { borderColor: correctColor, backgroundColor: colors.background },
                         feedback === 'wrong' && opt === problem.answer && { borderColor: colors.error, backgroundColor: colors.background },
                       ]}
                       activeOpacity={0.7}

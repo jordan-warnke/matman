@@ -50,10 +50,6 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
     gameType: 'primes-time-attack',
     fields: { maxNumber: { min: 50, max: 400 }, timePerProblem: true, problemCount: true },
   },
-  bounding: {
-    gameType: 'bound-time-attack',
-    fields: { timePerProblem: true, problemCount: true },
-  },
   parity: {
     gameType: 'parity-drill',
     fields: { timePerProblem: true, problemCount: true },
@@ -89,6 +85,10 @@ const MODE_CONFIGS: Record<string, ModeConfig> = {
   numbersense: {
     gameType: 'numbersense-drill',
     fields: { timePerProblem: true, problemCount: true },
+  },
+  primefactor: {
+    gameType: 'primefactor-drill',
+    fields: { maxNumber: { min: 50, max: 500 }, timePerProblem: true, problemCount: true },
   },
 };
 
@@ -184,26 +184,6 @@ export default function MainMenu() {
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
             onPress={() => setSettingsMode('primes')}
-          >
-            <SlidersIcon color={colors.muted} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.secondaryDark, borderBottomWidth: 5 }]}>
-          <TouchableOpacity
-            style={styles.cardMain}
-            activeOpacity={0.85}
-            onPress={() => router.push({ pathname: '/bounding/game', params: { type: 'bound-time-attack' } })}
-          >
-            <View style={[styles.iconBox, { backgroundColor: colors.secondary }]}>
-                <Text style={styles.iconText}>≈</Text>
-              </View>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Bounding</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.cogBtn, { borderLeftColor: colors.border }]}
-            hitSlop={8}
-            onPress={() => setSettingsMode('bounding')}
           >
             <SlidersIcon color={colors.muted} />
           </TouchableOpacity>
@@ -324,6 +304,26 @@ export default function MainMenu() {
             style={[styles.cogBtn, { borderLeftColor: colors.border }]}
             hitSlop={8}
             onPress={() => setSettingsMode('numbersense')}
+          >
+            <SlidersIcon color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.errorDark, borderBottomWidth: 5 }]}>
+          <TouchableOpacity
+            style={styles.cardMain}
+            activeOpacity={0.85}
+            onPress={() => router.push({ pathname: '/primefactor/game' as any, params: { type: 'primefactor-drill' } })}
+          >
+            <View style={[styles.iconBox, { backgroundColor: colors.error }]}>
+                <Text style={styles.iconText}>Pⁿ</Text>
+              </View>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Prime Factorization</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cogBtn, { borderLeftColor: colors.border }]}
+            hitSlop={8}
+            onPress={() => setSettingsMode('primefactor')}
           >
             <SlidersIcon color={colors.muted} />
           </TouchableOpacity>

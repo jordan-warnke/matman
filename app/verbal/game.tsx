@@ -18,14 +18,13 @@ import {
     shuffleVerbalOptions,
     VerbalProblem,
 } from '../../data/verbal';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
-    ankiWeight,
     DEFAULT_MODE_SETTINGS,
     GameType,
-    History,
-    loadHistory,
     loadModeSettings,
     ModeSettings,
     recordByKey,
@@ -42,39 +41,21 @@ export default function VerbalGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
-  const recentRef = useRef<string[]>([]);
+  const pool = group
+    ? ALL_VERBAL_PROBLEMS.filter(p => p.group === group)
+    : ALL_VERBAL_PROBLEMS;
+  const selector = useRetrySelector({ pool });  
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       setReady(true);
     });
   }, [gameType]);
 
   const generate = useCallback((): VerbalProblem => {
-    const history = historyRef.current;
-    let pool: VerbalProblem[] = ALL_VERBAL_PROBLEMS;
-
-    if (group) {
-      pool = pool.filter(p => p.group === group);
-    }
-
-    const recent = new Set(recentRef.current);
-    const eligible = pool.filter(p => !recent.has(p.historyKey));
-    const candidates = eligible.length > 0 ? eligible : pool;
-
-    let best: VerbalProblem = candidates[0];
-    let bestW = -1;
-    for (const item of candidates) {
-      const w = ankiWeight(history[item.historyKey]) * (0.5 + Math.random());
-      if (w > bestW) { bestW = w; best = item; }
-    }
-
-    recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
-    return shuffleVerbalOptions(best);
-  }, [group]);
+    return shuffleVerbalOptions(selector.next());
+  }, [selector]);
 
   const [problem, setProblem] = useState<VerbalProblem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
@@ -168,7 +149,8 @@ export default function VerbalGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -225,12 +207,17 @@ export default function VerbalGameScreen() {
     if (timed) startProblemTimer();
   }, [timed, startProblemTimer, problem, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
-  const workFormula = problem ? problem.display : '';
+  const workFormula = problem
+    ? (problem.question ? `${problem.display}  ·  ${problem.question}` : problem.display)
+    : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   useWebShortcuts(
     problem
@@ -311,6 +298,7 @@ export default function VerbalGameScreen() {
         onPress: () => answer(opt),
       }))}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={String(problem.answer)}
       peekValue={String(problem.answer)}
       peekVisible={peekVisible && feedback === 'none'}
@@ -342,20 +330,23 @@ export default function VerbalGameScreen() {
       <View style={styles.problemArea}>
         <Text style={[styles.categoryLabel, { color: colors.muted }]}>{problem.category}</Text>
         <View style={styles.promptBlock}>
+          <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
           <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
             <Text style={[styles.displayText, { color: feedbackColor }]}>{problem.display}</Text>
             <Text style={[styles.questionText, { color: colors.text }]}>
               {problem.question}
             </Text>
           </Animated.View>
+          {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+          </TouchableOpacity>
         </View>
-        {(feedback !== 'none' || peekVisible) && (
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}
@@ -378,7 +369,7 @@ export default function VerbalGameScreen() {
 
           if (feedback !== 'none') {
             if (isCorrectOption) {
-              optStyle = { backgroundColor: colors.correct, borderColor: colors.correct };
+              optStyle = { backgroundColor: correctColor, borderColor: correctColor };
               textColor = '#FFF';
             } else if (isSelected) {
               optStyle = { backgroundColor: colors.error + '22', borderColor: colors.error };

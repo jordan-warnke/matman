@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useCopyQuestion } from '../hooks/useCopyQuestion';
 import MathText from './MathText';
 
 const COLS = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -58,6 +59,8 @@ export interface WorkModeProps {
   feedbackState?: 'correct' | 'wrong' | null;
   /** Correct answer to show in cell after feedback */
   correctAnswer?: string;
+  /** Structured answer rows shown below active row (replaces merged E+F cell) */
+  answerRows?: { label: string; detail: string }[];
   /** Optional richer text to show only in the active cell after feedback */
   revealedAnswer?: string;
   /** Optional peeked value shown before submission */
@@ -76,6 +79,8 @@ export interface WorkModeProps {
   onNext?: () => void;
   /** Repeat same question */
   onRepeat?: () => void;
+  /** Whether a correct answer is for a review question (shows gold instead of green) */
+  reviewCorrect?: boolean;
 }
 
 interface Props extends WorkModeProps {
@@ -92,9 +97,11 @@ export default function SpreadsheetChrome({ children, formula, panHandlers, ...w
   if (!formula) return <>{children}</>;
 
     const { cellRef, options, inputValue, onInputChange, onInputSubmit,
-      feedbackState, correctAnswer, revealedAnswer, peekValue, peekVisible, selectedValue,
+      feedbackState, correctAnswer, answerRows, revealedAnswer, peekValue, peekVisible, selectedValue,
       selectedOptionTranslateX, selectedOptionTranslateY, selectedOptionScale,
-      onPeek, onBack, onNext, onRepeat } = workProps;
+      onPeek, onBack, onNext, onRepeat, reviewCorrect } = workProps;
+  const correctColor = reviewCorrect ? colors.gold : colors.correct;
+  const { onCopy: copyFormula, copiedVisible } = useCopyQuestion(formula || '');
   const inputRef = useRef<TextInput>(null);
 
   const cellBorder = { borderRightWidth: 1, borderRightColor: colors.border };
@@ -188,28 +195,21 @@ export default function SpreadsheetChrome({ children, formula, panHandlers, ...w
           <Text style={[styles.cellRefText, { color: colors.text }]}>{cellRef || 'C5'}</Text>
         </View>
         <Text style={[styles.fxLabel, { color: colors.muted }]}>fx</Text>
-        <View style={styles.formulaValue}>
-          <MathText
-            text={formula || ''}
-            style={[styles.formulaText, { color: colors.text }, styles.leftAlignedText]}
-            compact
-            containerStyle={styles.leftAlignedContent}
-          />
-          {feedbackState && correctAnswer ? (
+        <TouchableOpacity style={styles.formulaValue} onPress={copyFormula} activeOpacity={0.6}>
+          {copiedVisible ? (
+            <Text style={[styles.formulaText, { color: colors.correct }]}>Copied!</Text>
+          ) : (
             <MathText
-              text={` = ${revealedAnswer ?? correctAnswer}`}
-              style={[styles.formulaText, { color: colors.correct, fontWeight: '600' }]}
+              text={formula || ''}
+              style={[styles.formulaText, { color: colors.text }, styles.leftAlignedText]}
               compact
+              containerStyle={styles.leftAlignedContent}
             />
-          ) : peekVisible && peekValue ? (
-            <MathText
-              text={` = ${peekValue}`}
-              style={[styles.formulaText, { color: colors.correct, fontWeight: '600' }]}
-              compact
-            />
-          ) : null}
-        </View>
+          )}
+        </TouchableOpacity>
       </View>
+
+      {/* Answer stays in cells — no separate banner */}
 
       {/* Active row — game content lives here */}
       <View style={[styles.row, rowBorder]}>
@@ -225,10 +225,10 @@ export default function SpreadsheetChrome({ children, formula, panHandlers, ...w
         </View>
         {/* Cell C: the "active" cell — shows answer or input */}
         <View style={[styles.activeCol, cellBorder, {
-          borderColor: feedbackState === 'correct' ? colors.correct
+          borderColor: feedbackState === 'correct' ? correctColor
             : feedbackState === 'wrong' ? colors.error
             : colors.primary,
-          backgroundColor: feedbackState === 'correct' ? colors.correct + '15'
+          backgroundColor: feedbackState === 'correct' ? correctColor + '15'
             : feedbackState === 'wrong' ? colors.error + '15'
             : colors.primary + '10',
         }]}>
@@ -249,35 +249,75 @@ export default function SpreadsheetChrome({ children, formula, panHandlers, ...w
             <Text style={[styles.cellText, { color: colors.muted }]}>—</Text>
           )}
         </View>
-        {/* Remaining cells */}
-        <View style={[styles.col, cellBorder]}>
-          <Text style={[styles.cellText, { color: colors.text }]}>35,554</Text>
-        </View>
-        <View style={[styles.col, cellBorder]}>
-          <Text style={[styles.cellText, { color: colors.text }]}>+3.1</Text>
-        </View>
+        {/* Remaining cells — when answer is visible and no answerRows, merge E+F into one wide cell */}
+        {!answerRows && ((feedbackState && correctAnswer) || (peekVisible && peekValue)) ? (
+          <View style={[styles.col, cellBorder, { flex: 2, overflow: 'hidden' }]}>
+            <Text
+              style={[styles.cellText, { color: colors.text, fontWeight: '600' }]}
+              numberOfLines={1}
+            >
+              {revealedAnswer ?? correctAnswer ?? peekValue ?? ''}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={[styles.col, cellBorder]}>
+              <Text style={[styles.cellText, { color: colors.text }]}>35,554</Text>
+            </View>
+            <View style={[styles.col, cellBorder]}>
+              <Text style={[styles.cellText, { color: colors.text }]}>+3.1</Text>
+            </View>
+          </>
+        )}
       </View>
 
-      {/* Mid data rows — between active row and options */}
-      {MID_ROWS.map((row, i) => (
-        <View key={`m${i}`} style={[styles.row, rowBorder]}>
-          <View style={[styles.rowNum, cellBorder, { backgroundColor: colors.card }]}>
-            <Text style={[styles.rowNumText, { color: colors.muted }]}>{TOP_ROWS.length + 2 + i}</Text>
-          </View>
-          {row.map((cell, j) => (
-            <View key={j} style={[styles.col, cellBorder]}>
-              <Text
-                style={[styles.cellText, {
-                  color: cell.startsWith('+') ? '#548235' : cell.startsWith('-') ? '#C00000' : colors.text,
-                }]}
-                numberOfLines={1}
-              >
-                {cell}
+      {/* Answer rows — structured multi-row answer display below active row */}
+      {feedbackState && answerRows && answerRows.length > 0 ? (
+        answerRows.map((item, i) => (
+          <View key={`ar${i}`} style={[styles.row, rowBorder]}>
+            <View style={[styles.rowNum, cellBorder, { backgroundColor: colors.card }]}>
+              <Text style={[styles.rowNumText, { color: colors.muted }]}>{TOP_ROWS.length + 2 + i}</Text>
+            </View>
+            <View style={[styles.col, cellBorder, { flex: 2 }]}>
+              <Text style={[styles.cellText, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
+                {item.label}
               </Text>
             </View>
-          ))}
-        </View>
-      ))}
+            <View style={[styles.col, cellBorder, { flex: 2 }]}>
+              <Text style={[styles.cellText, { color: colors.muted }]} numberOfLines={1}>
+                {item.detail}
+              </Text>
+            </View>
+            <View style={[styles.col, cellBorder]}>
+              <Text style={[styles.cellText, { color: colors.text }]} />
+            </View>
+            <View style={[styles.col, cellBorder]}>
+              <Text style={[styles.cellText, { color: colors.text }]} />
+            </View>
+          </View>
+        ))
+      ) : (
+        /* Mid data rows — between active row and options */
+        MID_ROWS.map((row, i) => (
+          <View key={`m${i}`} style={[styles.row, rowBorder]}>
+            <View style={[styles.rowNum, cellBorder, { backgroundColor: colors.card }]}>
+              <Text style={[styles.rowNumText, { color: colors.muted }]}>{TOP_ROWS.length + 2 + i}</Text>
+            </View>
+            {row.map((cell, j) => (
+              <View key={j} style={[styles.col, cellBorder]}>
+                <Text
+                  style={[styles.cellText, {
+                    color: cell.startsWith('+') ? '#548235' : cell.startsWith('-') ? '#C00000' : colors.text,
+                  }]}
+                  numberOfLines={1}
+                >
+                  {cell}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))
+      )}
 
       {/* Options area — looks like a cell dropdown or data entry area */}
       {options && options.length > 0 && (
@@ -301,7 +341,7 @@ export default function SpreadsheetChrome({ children, formula, panHandlers, ...w
                   style={[
                     styles.dropdownRow,
                     { borderBottomColor: colors.border },
-                    isCorrect && feedbackState && { backgroundColor: colors.correct + '18' },
+                    isCorrect && feedbackState && { backgroundColor: correctColor + '18' },
                     isWrong && { backgroundColor: colors.error + '18' },
                   ]}
                   onPress={feedbackState && isCorrect ? onNext : opt.onPress}
@@ -313,7 +353,7 @@ export default function SpreadsheetChrome({ children, formula, panHandlers, ...w
                     style={[
                       styles.dropdownText,
                       { color: colors.text },
-                      ...(isCorrect && feedbackState ? [{ color: colors.correct, fontWeight: '600' as const }] : []),
+                      ...(isCorrect && feedbackState ? [{ color: correctColor, fontWeight: '600' as const }] : []),
                       ...(isWrong ? [{ color: colors.error }] : []),
                       styles.leftAlignedText,
                     ]}
@@ -465,7 +505,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
   },
   leftAlignedContent: {
     justifyContent: 'flex-start',
@@ -520,7 +560,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
   },
   dropdownRow: {
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

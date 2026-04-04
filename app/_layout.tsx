@@ -24,6 +24,7 @@ function InnerLayout() {
       <Stack.Screen name="verbal/index" />
       <Stack.Screen name="verbal/game" />
       <Stack.Screen name="numbersense/game" />
+      <Stack.Screen name="primefactor/game" />
     </Stack>
   );
 }

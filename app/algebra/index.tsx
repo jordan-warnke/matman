@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
+import { ALGEBRA_CATEGORY_MAP, GAUNTLET_GROUPS, GauntletGroup } from '../../data/algebra';
 import {
     DEFAULT_MODE_SETTINGS,
     GameType,
@@ -204,6 +205,56 @@ export default function AlgebraHub() {
                 maxLength={3}
               />
             </View>
+
+            {settingsFor === GAUNTLET_TYPE && (() => {
+              const allCats = settings.gauntletCategories ?? Object.keys(ALGEBRA_CATEGORY_MAP);
+              const catSet = new Set(allCats);
+              return (
+                <ScrollView bounces={false} style={{ maxHeight: 320 }}>
+                  <View style={{ gap: 10 }}>
+                    <Text style={[styles.modalLabel, { color: colors.text, flex: undefined }]}>Categories</Text>
+                    {(Object.entries(GAUNTLET_GROUPS) as [GauntletGroup, string][]).map(([gk, gl]) => {
+                      const groupCats = Object.entries(ALGEBRA_CATEGORY_MAP)
+                        .filter(([, v]) => v.group === gk).map(([k]) => k);
+                      const allOn = groupCats.every(c => catSet.has(c));
+                      return (
+                        <View key={gk} style={{ gap: 6 }}>
+                          <TouchableOpacity activeOpacity={0.7} onPress={() => {
+                            const cur = [...catSet];
+                            if (allOn) {
+                              const rest = cur.filter(c => !groupCats.includes(c));
+                              if (rest.length > 0) patch({ gauntletCategories: rest });
+                            } else {
+                              patch({ gauntletCategories: [...new Set([...cur, ...groupCats])] });
+                            }
+                          }}>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: allOn ? colors.purple : colors.muted }}>{gl}</Text>
+                          </TouchableOpacity>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {groupCats.map(ck => {
+                              const info = ALGEBRA_CATEGORY_MAP[ck];
+                              const on = catSet.has(ck);
+                              const last = on && catSet.size <= 1;
+                              return (
+                                <TouchableOpacity key={ck} disabled={last} activeOpacity={0.7}
+                                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+                                    backgroundColor: on ? colors.purple : colors.border, opacity: last ? 0.55 : 1 }}
+                                  onPress={() => {
+                                    const cur = [...catSet];
+                                    patch({ gauntletCategories: on ? cur.filter(c => c !== ck) : [...cur, ck] });
+                                  }}>
+                                  <Text style={{ fontSize: 12, fontWeight: '700', color: on ? '#FFF' : colors.text }}>{info.label}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              );
+            })()}
 
             <TouchableOpacity
               style={[styles.doneBtn, { backgroundColor: colors.purple, borderBottomColor: colors.purpleDark }]}

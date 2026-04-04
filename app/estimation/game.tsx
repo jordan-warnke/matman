@@ -14,14 +14,13 @@ import SpreadsheetChrome from '../../components/SpreadsheetChrome';
 import { Font, Spacing } from '../../constants/Theme';
 import { useTheme } from '../../contexts/ThemeContext';
 import { EstimationProblem, generateEstimation, regenerateOptions } from '../../data/estimation';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
 import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
 import { useWebShortcuts } from '../../hooks/useWebShortcuts';
 import {
-    ankiWeight,
     DEFAULT_MODE_SETTINGS,
     GameType,
-    History,
-    loadHistory,
     loadModeSettings,
     ModeSettings,
     recordByKey,
@@ -37,35 +36,18 @@ export default function EstimationGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
-  const recentRef = useRef<string[]>([]);
+  const selector = useRetrySelector({ generate: generateEstimation, candidateCount: 12 });
 
   useEffect(() => {
-    Promise.all([loadModeSettings(gameType), loadHistory()]).then(([s, h]) => {
+    Promise.all([loadModeSettings(gameType), selector.refreshHistory()]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       setReady(true);
     });
   }, [gameType]);
 
   const generate = useCallback((): EstimationProblem => {
-    const recent = new Set(recentRef.current);
-    // Generate candidates and pick using ankiWeight
-    let best: EstimationProblem | null = null;
-    let bestW = -1;
-
-    for (let i = 0; i < 12; i++) {
-      const candidate = generateEstimation();
-      if (recent.has(candidate.historyKey)) continue;
-      const w = ankiWeight(historyRef.current[candidate.historyKey]) * (0.5 + Math.random());
-      if (w > bestW) { bestW = w; best = candidate; }
-    }
-
-    if (!best) best = generateEstimation();
-
-    recentRef.current = [...recentRef.current, best.historyKey].slice(-3);
-    return best;
-  }, []);
+    return selector.next();
+  }, [selector]);
 
   const [problem, setProblem] = useState<EstimationProblem | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('none');
@@ -159,7 +141,8 @@ export default function EstimationGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -212,16 +195,19 @@ export default function EstimationGameScreen() {
     if (timed) startProblemTimer();
   }, [timed, startProblemTimer, problem, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
   const workFormula = problem
     ? problem.display
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
-  // Use accent (yellow) for estimation — distinct from algebra (purple), bounding (secondary)
+  // Use accent (yellow) for estimation
   const modeColor = colors.accent;
   const modeColorDark = colors.accentDark;
 
@@ -304,6 +290,7 @@ export default function EstimationGameScreen() {
         onPress: () => answer(opt),
       }))}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={problem.answer}
       peekValue={problem.answer}
       peekVisible={peekVisible && feedback === 'none'}
@@ -334,6 +321,7 @@ export default function EstimationGameScreen() {
       <View style={styles.problemArea}>
         <View style={styles.problemInlineRow}>
           <View style={styles.promptBlock}>
+            <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
             <Animated.View style={{ transform: [{ translateX: shakeAnim }, { scale: scaleAnim }] }}>
               <Text style={[styles.categoryLabel, { color: colors.muted }]}>{problem.category}</Text>
               <Text style={[styles.displayText, { color: feedbackColor }]}> 
@@ -343,15 +331,17 @@ export default function EstimationGameScreen() {
                 {problem.question}
               </Text>
             </Animated.View>
+            {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+            </TouchableOpacity>
           </View>
         </View>
-        {(feedback !== 'none' || peekVisible) && (
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}
@@ -376,7 +366,7 @@ export default function EstimationGameScreen() {
 
           if (feedback !== 'none') {
             if (isCorrectOption) {
-              optStyle = { backgroundColor: colors.correct, borderColor: colors.correct };
+              optStyle = { backgroundColor: correctColor, borderColor: correctColor };
               textColor = '#FFF';
             } else if (isSelected) {
               optStyle = { backgroundColor: colors.error + '22', borderColor: colors.error };

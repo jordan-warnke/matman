@@ -387,7 +387,8 @@ function buildLeadingCoeff(): FactoringProblem[] {
 function buildCubes(): FactoringProblem[] {
   const problems: FactoringProblem[] = [];
 
-  for (let a = 1; a <= 6; a++) {
+  // Simple: x³ ± a³ for a = 1..10
+  for (let a = 1; a <= 10; a++) {
     const a3 = a * a * a;
     const a2 = a * a;
 
@@ -422,6 +423,49 @@ function buildCubes(): FactoringProblem[] {
       historyKey: `fac:cub:${a}_n`,
       category: 'Difference of Cubes',
     });
+  }
+
+  // Leading coefficient cubes: (kx)³ ± a³
+  for (const k of [2, 3]) {
+    const k3 = k * k * k;
+    const k2 = k * k;
+    for (let a = 1; a <= 5; a++) {
+      const a3 = a * a * a;
+      const a2 = a * a;
+      const kxStr = `${k}x`;
+
+      // (kx)³ + a³
+      problems.push({
+        display: `${k3}x³ + ${a3}`,
+        question: 'Factor:',
+        answer: `(${kxStr} + ${a})(${k2}x² − ${k * a}x + ${a2})`,
+        options: [
+          `(${kxStr} + ${a})(${k2}x² − ${k * a}x + ${a2})`,
+          `(${kxStr} + ${a})(${k2}x² + ${k * a}x + ${a2})`,
+          `(${kxStr} − ${a})(${k2}x² + ${k * a}x + ${a2})`,
+          `(${kxStr} + ${a})³`,
+        ],
+        hint: `${k3}x³ + ${a3} = (${kxStr})³ + ${a}³`,
+        historyKey: `fac:cub:${k}_${a}_p`,
+        category: 'Sum of Cubes',
+      });
+
+      // (kx)³ − a³
+      problems.push({
+        display: `${k3}x³ − ${a3}`,
+        question: 'Factor:',
+        answer: `(${kxStr} − ${a})(${k2}x² + ${k * a}x + ${a2})`,
+        options: [
+          `(${kxStr} − ${a})(${k2}x² + ${k * a}x + ${a2})`,
+          `(${kxStr} − ${a})(${k2}x² − ${k * a}x + ${a2})`,
+          `(${kxStr} + ${a})(${k2}x² − ${k * a}x + ${a2})`,
+          `(${kxStr} − ${a})³`,
+        ],
+        hint: `${k3}x³ − ${a3} = (${kxStr})³ − ${a}³`,
+        historyKey: `fac:cub:${k}_${a}_n`,
+        category: 'Difference of Cubes',
+      });
+    }
   }
 
   return problems;

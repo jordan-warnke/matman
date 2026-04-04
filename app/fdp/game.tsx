@@ -24,6 +24,17 @@ import {
     getDisplayValue,
     pickFormats,
 } from '../../data/fdp';
+import { useCopyQuestion } from '../../hooks/useCopyQuestion';
+import { useInlinePeek } from '../../hooks/useInlinePeek';
+import { useRetrySelector } from '../../hooks/useRetrySelector';
+import { useWebShortcuts } from '../../hooks/useWebShortcuts';
+import {
+    DEFAULT_MODE_SETTINGS,
+    GameType,
+    loadModeSettings,
+    ModeSettings,
+    recordByKey,
+} from '../../store/HistoryStore';
 
 /**
  * For a wrong FDP option, show what value it actually represents
@@ -41,18 +52,6 @@ function formatFDPOptionHint(
   const actualSource = getDisplayValue(entry, problem.sourceFormat);
   return `(= ${actualSource})`;
 }
-import { useInlinePeek } from '../../hooks/useInlinePeek';
-import { useWebShortcuts } from '../../hooks/useWebShortcuts';
-import {
-    ankiWeight,
-    DEFAULT_MODE_SETTINGS,
-    GameType,
-    History,
-    loadHistory,
-    loadModeSettings,
-    ModeSettings,
-    recordByKey,
-} from '../../store/HistoryStore';
 
 
 type Feedback = 'none' | 'correct' | 'wrong';
@@ -76,15 +75,45 @@ export default function FDPGameScreen() {
   const [settings, setSettings] = useState<ModeSettings>(DEFAULT_MODE_SETTINGS);
   const [ready, setReady] = useState(false);
 
-  const historyRef = useRef<History>({});
+  const selector = useRetrySelector({
+    generate: (): FDPProblem => {
+      const maxNum = settings.maxNumerator;
+      const maxDen = settings.maxDenominator;
+      const filtered = FDP_TABLE.filter((entry) => {
+        const parts = entry.fraction.split('/');
+        const num = parseInt(parts[0], 10);
+        const den = parseInt(parts[1], 10);
+        if (maxNum != null && num > maxNum) return false;
+        if (maxDen != null && den > maxDen) return false;
+        return true;
+      });
+      const table = filtered.length > 0 ? filtered : FDP_TABLE;
+      const entry = table[Math.floor(Math.random() * table.length)];
+      let source: FDPFormat, target: FDPFormat;
+      if (gameType === 'fractions-drill') {
+        source = 'fraction'; target = 'decimal';
+      } else if (gameType === 'decimals-drill') {
+        source = 'decimal'; target = 'fraction';
+      } else if (gameType === 'percents-drill') {
+        source = 'fraction'; target = 'percent';
+      } else {
+        ({ source, target } = pickFormats());
+      }
+      const displayValue = getDisplayValue(entry, source);
+      const correctAnswer = getDisplayValue(entry, target);
+      const options = generateOptions(entry, target);
+      const historyKey = `fdp:${entry.fraction}:${target}`;
+      return { entry, sourceFormat: source, targetFormat: target, displayValue, correctAnswer, options, historyKey };
+    },
+    candidateCount: 12,
+  });
 
   useEffect(() => {
     Promise.all([
       loadModeSettings(gameType),
-      loadHistory(),
-    ]).then(([s, h]) => {
+      selector.refreshHistory(),
+    ]).then(([s]) => {
       setSettings(s);
-      historyRef.current = h;
       setReady(true);
     });
   }, [gameType]);
@@ -112,61 +141,8 @@ export default function FDPGameScreen() {
 
   // ── problem generator ──
   const generate = useCallback((): FDPProblem => {
-    const history = historyRef.current;
-
-    // Filter table by numerator / denominator limits
-    const maxNum = settings.maxNumerator;
-    const maxDen = settings.maxDenominator;
-    const filtered = FDP_TABLE.filter((entry) => {
-      const parts = entry.fraction.split('/');
-      const num = parseInt(parts[0], 10);
-      const den = parseInt(parts[1], 10);
-      if (maxNum != null && num > maxNum) return false;
-      if (maxDen != null && den > maxDen) return false;
-      return true;
-    });
-    const table = filtered.length > 0 ? filtered : FDP_TABLE;
-
-    // Weighted selection based on error rate
-    const pool = table.map((entry) => {
-      let source: FDPFormat, target: FDPFormat;
-      if (gameType === 'fractions-drill') {
-        source = 'fraction'; target = 'decimal';
-      } else if (gameType === 'decimals-drill') {
-        source = 'decimal'; target = 'fraction';
-      } else if (gameType === 'percents-drill') {
-        source = 'fraction'; target = 'percent';
-      } else {
-        ({ source, target } = pickFormats());
-      }
-      const key = `fdp:${entry.fraction}:${target}`;
-      const weight = ankiWeight(history[key]);
-      return { entry, source, target, weight };
-    });
-
-    const totalWeight = pool.reduce((s, p) => s + p.weight, 0);
-    let rand = Math.random() * totalWeight;
-    let chosen = pool[0];
-    for (const p of pool) {
-      rand -= p.weight;
-      if (rand <= 0) { chosen = p; break; }
-    }
-
-    const displayValue = getDisplayValue(chosen.entry, chosen.source);
-    const correctAnswer = getDisplayValue(chosen.entry, chosen.target);
-    const options = generateOptions(chosen.entry, chosen.target);
-    const historyKey = `fdp:${chosen.entry.fraction}:${chosen.target}`;
-
-    return {
-      entry: chosen.entry,
-      sourceFormat: chosen.source,
-      targetFormat: chosen.target,
-      displayValue,
-      correctAnswer,
-      options,
-      historyKey,
-    };
-  }, [gameType, settings.maxNumerator, settings.maxDenominator]);
+    return selector.next();
+  }, [selector]);
 
   // ── start per-problem timer ──
   const startProblemTimer = useCallback(() => {
@@ -241,7 +217,8 @@ export default function FDPGameScreen() {
 
       const recordedCorrect = isCorrect && !peekUsed;
       await recordByKey(problem.historyKey, recordedCorrect, elapsed);
-      historyRef.current = await loadHistory();
+      if (!recordedCorrect) selector.enqueueRetry(problem.historyKey, problem);
+      await selector.refreshHistory();
       setAnswered((c) => c + 1);
 
       if (isCorrect) {
@@ -309,14 +286,17 @@ export default function FDPGameScreen() {
     if (timed) startProblemTimer();
   }, [timed, startProblemTimer, problem, resetPeek]);
 
+  const isReview = (problem as any)?.resurfacing === 'review';
+  const correctColor = isReview && feedback === 'correct' ? colors.gold : colors.correct;
   const feedbackColor =
-    feedback === 'correct' ? colors.correct
+    feedback === 'correct' ? correctColor
       : feedback === 'wrong' ? colors.error
         : colors.text;
 
   const workFormula = problem
     ? `${problem.displayValue} → ${formatLabel(problem.targetFormat)}`
     : '';
+  const { onCopy, copiedVisible } = useCopyQuestion(workFormula);
 
   useWebShortcuts(
     problem && multipleChoice
@@ -400,6 +380,7 @@ export default function FDPGameScreen() {
       onInputChange={!multipleChoice ? (v) => setInput(v) : undefined}
       onInputSubmit={!multipleChoice ? handleInputSubmit : undefined}
       feedbackState={feedback === 'none' ? null : feedback}
+      reviewCorrect={feedback === 'correct' && isReview}
       correctAnswer={String(problem.correctAnswer)}
       peekValue={String(problem.correctAnswer)}
       peekVisible={peekVisible && feedback === 'none'}
@@ -429,18 +410,21 @@ export default function FDPGameScreen() {
 
       {/* Problem */}
       <View style={styles.problemArea}>
+        <TouchableOpacity onPress={onCopy} activeOpacity={0.7}>
         <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
           <Text style={[styles.problemText, { color: feedbackColor }]}> 
             {problem.displayValue}
           </Text>
         </Animated.View>
-        {(feedback !== 'none' || peekVisible) && (
+        {copiedVisible && <Text style={{ textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 2 }}>Copied!</Text>}
+        </TouchableOpacity>
+        {!isWork && (feedback !== 'none' || peekVisible) && (
           <Text
             style={[
               styles.inlineReveal,
               {
                 color: feedback !== 'none'
-                  ? colors.correct
+                  ? correctColor
                   : colors.primary,
               },
             ]}
@@ -465,7 +449,7 @@ export default function FDPGameScreen() {
                 style={[
                   styles.mcBtn,
                   { backgroundColor: colors.card, borderColor: colors.border },
-                  feedback === 'correct' && opt === problem.correctAnswer && { borderColor: colors.correct, backgroundColor: colors.background },
+                  feedback === 'correct' && opt === problem.correctAnswer && { borderColor: correctColor, backgroundColor: colors.background },
                   feedback === 'wrong' && opt === problem.correctAnswer && { borderColor: colors.error, backgroundColor: colors.background },
                 ]}
                 activeOpacity={0.7}
